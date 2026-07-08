@@ -1,0 +1,6 @@
+{
+  "name": "Action Sales Management System",
+  "description": "A premium sales action tracking and reporting dashboard integrated with Google Sheets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

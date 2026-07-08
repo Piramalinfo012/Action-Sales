@@ -1,0 +1,604 @@
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  Menu, 
+  X, 
+  Database, 
+  AlertCircle, 
+  CheckCircle, 
+  Info, 
+  LayoutDashboard, 
+  PlusCircle, 
+  Clock, 
+  History, 
+  BarChart3, 
+  FolderOpen,
+  Settings as SettingsIcon, 
+  LogOut, 
+  BellRing,
+  Sun,
+  Moon
+} from 'lucide-react';
+import { User, ActionEntry, SidebarTab } from './types';
+import { 
+  getActionsFromSheet, 
+  insertActionToSheet, 
+  updateActionInSheet, 
+  updateL1ConfirmationInSheet,
+  deleteActionFromSheet,
+  getUsersFromSheet
+} from './api';
+import Sidebar from './components/Sidebar';
+import DashboardView from './components/DashboardView';
+import NewActionView from './components/NewActionView';
+import PendingView from './components/PendingView';
+import HistoryView from './components/HistoryView';
+import ReportsView from './components/ReportsView';
+import SettingsView from './components/SettingsView';
+import LoginView from './components/LoginView';
+import DriveFolderView from './components/DriveFolderView';
+
+interface Toast {
+  id: string;
+  type: 'success' | 'error' | 'info';
+  title: string;
+  desc: string;
+}
+
+export default function App() {
+  // --- 1. Authentic Session Management ---
+  const [user, setUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('currentUser');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const [activeTab, setActiveTab] = useState<SidebarTab>('dashboard');
+  const [actions, setActions] = useState<ActionEntry[]>([]);
+  const [isOffline, setIsOffline] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('theme') === 'dark' || 
+      (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  });
+
+  const [driveFolderId, setDriveFolderId] = useState(() => {
+    return localStorage.getItem('driveFolderId') || '1HBi8BusMyDY_lQ1b7iJEJQvcuqayThu_';
+  });
+
+  const handleUpdateDriveFolderId = (id: string) => {
+    setDriveFolderId(id);
+    localStorage.setItem('driveFolderId', id);
+    addToast('success', 'Shared Drive Synchronized', 'Google Drive shared folder reference has been updated successfully!');
+  };
+  
+  // Mobile drawer state
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Toast notifications state
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const addToast = (type: 'success' | 'error' | 'info', title: string, desc: string) => {
+    const id = Math.random().toString(36).slice(2, 9);
+    setToasts((prev) => [...prev, { id, type, title, desc }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 5000);
+  };
+
+  // Toggle dark mode classes
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
+
+  // Load action logs from Google Sheet or Offline fallback
+  const loadActions = async (showNotification = false) => {
+    setIsRefreshing(true);
+    try {
+      const res = await getActionsFromSheet();
+      if (res.success && res.data) {
+        setActions(res.data);
+        setIsOffline(false);
+        if (showNotification) {
+          addToast('success', 'Database Synchronized', 'Fetched latest transactions from Google Sheet!');
+        }
+      } else {
+        // Fallback to offline LocalStorage
+        setIsOffline(true);
+        const stored = localStorage.getItem('offlineActions');
+        if (stored) {
+          setActions(JSON.parse(stored));
+        }
+        if (showNotification) {
+          addToast('info', 'Offline Cache', 'Loaded local sales auctions offline (Sheet "Data" not ready yet).');
+        }
+      }
+    } catch (err: any) {
+      setIsOffline(true);
+      const stored = localStorage.getItem('offlineActions');
+      if (stored) {
+        setActions(JSON.parse(stored));
+      }
+      addToast('error', 'Sync Timed Out', 'Operating in Offline Mode due to slow sheets connectivity.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Trigger loading logs on mount or session change
+  useEffect(() => {
+    if (user) {
+      loadActions();
+    }
+  }, [user]);
+
+  // --- CRUD API handlers ---
+  const handleAddAction = async (newEntry: ActionEntry): Promise<boolean> => {
+    let success = false;
+    
+    if (isOffline) {
+      // Local fallback insert
+      const updated = [newEntry, ...actions];
+      setActions(updated);
+      localStorage.setItem('offlineActions', JSON.stringify(updated));
+      success = true;
+      addToast('success', 'Transaction Saved Offline', 'Sales action logged in Local Storage cache!');
+    } else {
+      // Remote insert
+      const res = await insertActionToSheet(newEntry);
+      if (res.success) {
+        // Reload list from sheet to ensure perfect row index sync!
+        await loadActions();
+        success = true;
+        addToast('success', 'Database Updated', 'Sales action saved securely to Google Sheets!');
+      } else {
+        addToast('error', 'Remote Sync Failed', res.error || 'Failed to insert to Google Sheet.');
+      }
+    }
+    return success;
+  };
+
+  const handleUpdateAction = async (rowIndex: number, updatedEntry: ActionEntry): Promise<boolean> => {
+    let success = false;
+    
+    if (isOffline) {
+      // Local fallback update
+      const updatedList = actions.map((a) => a.id === updatedEntry.id ? updatedEntry : a);
+      setActions(updatedList);
+      localStorage.setItem('offlineActions', JSON.stringify(updatedList));
+      success = true;
+      addToast('success', 'Transaction Updated', 'Changes saved locally.');
+    } else {
+      // Remote sheet update
+      const res = await updateActionInSheet(rowIndex, updatedEntry);
+      if (res.success) {
+        await loadActions();
+        success = true;
+        addToast('success', 'Record Modified', 'Successfully updated record in Google Sheet database!');
+      } else {
+        addToast('error', 'Update Failed', res.error || 'Failed to save edits to Google Sheets.');
+      }
+    }
+    return success;
+  };
+
+  const handleUpdateL1Confirmation = async (
+    rowIndex: number,
+    entry: ActionEntry,
+    planned1: string,
+    actual1: string,
+    timeDelay1: string,
+    areWeL1: string,
+    timeDelay2: string = '',
+    willPurchase: string = '',
+    supplierName: string = '',
+    purchaseQuantity: string = '',
+    purchaseRate: string = '',
+    uploadPoCopy: string = '',
+    paymentTerms: string = '',
+    shortageCondition: string = ''
+  ): Promise<boolean> => {
+    let success = false;
+    const updatedEntry: ActionEntry = {
+      ...entry,
+      planned1,
+      actual1,
+      timeDelay1,
+      areWeL1,
+      timeDelay2,
+      willPurchase,
+      supplierName,
+      purchaseQuantity,
+      purchaseRate,
+      uploadPoCopy,
+      paymentTerms,
+      shortageCondition
+    };
+
+    if (isOffline) {
+      // Local fallback update
+      const updatedList = actions.map((a) => a.id === entry.id ? updatedEntry : a);
+      setActions(updatedList);
+      localStorage.setItem('offlineActions', JSON.stringify(updatedList));
+      success = true;
+      addToast('success', 'L1 Confirmation Saved', 'L1 details updated locally.');
+    } else {
+      // Remote sheet update
+      const res = await updateL1ConfirmationInSheet(
+        rowIndex,
+        entry,
+        planned1,
+        actual1,
+        timeDelay1,
+        areWeL1,
+        timeDelay2,
+        willPurchase,
+        supplierName,
+        purchaseQuantity,
+        purchaseRate,
+        uploadPoCopy,
+        paymentTerms,
+        shortageCondition
+      );
+      if (res.success) {
+        await loadActions();
+        success = true;
+        addToast('success', 'L1 Confirmed', 'Successfully updated L1 Confirmation in Google Sheet database!');
+      } else {
+        addToast('error', 'Update Failed', res.error || 'Failed to save L1 Confirmation to Google Sheets.');
+      }
+    }
+    return success;
+  };
+
+  const handleDeleteAction = async (rowIndex: number, actionId: string): Promise<boolean> => {
+    let success = false;
+    
+    if (isOffline) {
+      // Local fallback delete
+      const updatedList = actions.filter((a) => a.id !== actionId);
+      setActions(updatedList);
+      localStorage.setItem('offlineActions', JSON.stringify(updatedList));
+      success = true;
+      addToast('success', 'Record Deleted', 'Action removed from local database.');
+    } else {
+      // Remote sheet delete
+      const res = await deleteActionFromSheet(rowIndex);
+      if (res.success) {
+        await loadActions();
+        success = true;
+        addToast('success', 'Record Deleted', 'Permanently removed from Google Spreadsheet.');
+      } else {
+        addToast('error', 'Delete Failed', res.error || 'Failed to delete row from Google Sheet.');
+      }
+    }
+    return success;
+  };
+
+  const handleSyncDraft = async (action: ActionEntry): Promise<boolean> => {
+    const res = await insertActionToSheet(action);
+    if (res.success) {
+      const remainingLocal = actions.filter(a => a.id !== action.id);
+      localStorage.setItem('offlineActions', JSON.stringify(remainingLocal));
+      await loadActions();
+      addToast('success', 'Draft Uploaded', `Successfully uploaded transaction ${action.id} to Google Sheets!`);
+      return true;
+    } else {
+      addToast('error', 'Upload Failed', res.error || 'Failed to sync draft.');
+      return false;
+    }
+  };
+
+  // Logout handler
+  const handleLogout = () => {
+    localStorage.removeItem('currentUser');
+    setUser(null);
+    addToast('info', 'Session Ended', 'Logged out successfully. Passwords cleared from memory.');
+  };
+
+  // Return Login page if not authenticated
+  if (!user) {
+    return (
+      <div className={darkMode ? 'dark sleek-bg-dark min-h-screen' : 'sleek-bg-light min-h-screen'}>
+        <LoginView 
+          onLoginSuccess={(u) => setUser(u)} 
+          onAddToast={(type, title, desc) => addToast(type as any, title, desc)} 
+        />
+        
+        {/* Interactive Toasts inside Login */}
+        <div className="fixed bottom-5 right-5 z-50 space-y-3 pointer-events-none w-full max-w-sm px-4">
+          <AnimatePresence>
+            {toasts.map((toast) => (
+              <motion.div
+                key={toast.id}
+                initial={{ opacity: 0, y: 20, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+                className={`p-4 rounded-2xl shadow-xl flex items-start gap-3 border pointer-events-auto bg-slate-900 border-slate-800`}
+              >
+                {toast.type === 'success' && <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />}
+                {toast.type === 'error' && <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />}
+                {toast.type === 'info' && <Info className="w-5 h-5 text-blue-400 shrink-0" />}
+                <div>
+                  <h4 className="font-bold text-xs text-white uppercase tracking-wider">{toast.title}</h4>
+                  <p className="text-xs text-slate-400 mt-1 font-semibold leading-normal">{toast.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+      </div>
+    );
+  }
+
+  // --- Render App Content (Role Based Navigation Guard) ---
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        return (
+          <DashboardView 
+            actions={actions} 
+            isOffline={isOffline} 
+            user={user} 
+            onNavigate={(tab) => setActiveTab(tab)}
+            onRefresh={() => loadActions(true)}
+            isRefreshing={isRefreshing}
+          />
+        );
+      case 'new-action':
+        // Guard tab for allowed roles
+        if (user.role === 'Manager') {
+          return <div className="p-8 text-center text-slate-500 font-semibold">Access Denied. Sales role required.</div>;
+        }
+        return (
+          <NewActionView 
+            onAddAction={handleAddAction} 
+            user={user} 
+            isOffline={isOffline} 
+            actions={actions}
+            onUpdateL1Confirmation={handleUpdateL1Confirmation}
+          />
+        );
+      case 'pending':
+        if (user.role === 'Sales') {
+          return <div className="p-8 text-center text-slate-500 font-semibold">Access Denied. Managerial clearance required.</div>;
+        }
+        return (
+          <PendingView 
+            actions={actions} 
+            user={user} 
+            onUpdateAction={handleUpdateAction} 
+            onDeleteAction={handleDeleteAction}
+            isOffline={isOffline}
+            onSyncAction={handleSyncDraft}
+          />
+        );
+      case 'history':
+        return (
+          <HistoryView 
+            actions={actions} 
+            user={user} 
+            onUpdateAction={handleUpdateAction}
+            onDeleteAction={handleDeleteAction}
+            isOffline={isOffline}
+          />
+        );
+      case 'reports':
+        if (user.role === 'Sales') {
+          return <div className="p-8 text-center text-slate-500 font-semibold">Access Denied. Managerial clearance required.</div>;
+        }
+        return <ReportsView actions={actions} />;
+      case 'drive-folder':
+        return (
+          <DriveFolderView 
+            folderId={driveFolderId}
+            onAddToast={(type, title, desc) => addToast(type, title, desc)}
+          />
+        );
+      case 'settings':
+        return (
+          <SettingsView 
+            user={user} 
+            darkMode={darkMode} 
+            onToggleDarkMode={() => setDarkMode(!darkMode)}
+            onAddToast={(type, title, desc) => addToast(type as any, title, desc)}
+            driveFolderId={driveFolderId}
+            onUpdateDriveFolderId={handleUpdateDriveFolderId}
+          />
+        );
+      default:
+        return <div>Tab not found</div>;
+    }
+  };
+
+  // Nav items list for mobile rendering
+  const menuItems = [
+    { id: 'dashboard' as SidebarTab, label: 'Dashboard', icon: LayoutDashboard, roles: ['Admin', 'Sales', 'Manager'] },
+    { id: 'new-action' as SidebarTab, label: 'New Action', icon: PlusCircle, roles: ['Admin', 'Sales'] },
+    { id: 'pending' as SidebarTab, label: 'Pending', icon: Clock, roles: ['Admin', 'Manager'] },
+    { id: 'history' as SidebarTab, label: 'History', icon: History, roles: ['Admin', 'Sales', 'Manager'] },
+    { id: 'reports' as SidebarTab, label: 'Reports', icon: BarChart3, roles: ['Admin', 'Manager'] },
+    { id: 'drive-folder' as SidebarTab, label: 'Shared Drive', icon: FolderOpen, roles: ['Admin', 'Sales', 'Manager'] },
+    { id: 'settings' as SidebarTab, label: 'Settings', icon: SettingsIcon, roles: ['Admin', 'Sales', 'Manager'] },
+  ];
+
+  const allowedMobileItems = menuItems.filter(item => item.roles.includes(user.role));
+
+  return (
+    <div className={`min-h-screen font-sans transition-colors duration-300 ${darkMode ? 'dark sleek-bg-dark text-slate-100' : 'sleek-bg-light text-slate-800'}`}>
+      
+      <div className="flex">
+        {/* Desktop Left Navigation Sidebar */}
+        <Sidebar 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
+          user={user} 
+          onLogout={handleLogout} 
+        />
+
+        {/* Right workspace contents */}
+        <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
+          
+          {/* Header Bar */}
+          <header className="h-16 glass-nav sticky top-0 z-40 flex items-center justify-between px-6">
+            
+            {/* Left side: Hamburger menu button for mobile / Tablet */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="md:hidden p-2 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors cursor-pointer"
+              >
+                {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              </button>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider hidden sm:block">
+                  Current View:
+                </span>
+                <span className="text-sm font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest bg-blue-500/10 border border-blue-500/15 px-2.5 py-1 rounded-xl">
+                  {activeTab.replace('-', ' ')}
+                </span>
+              </div>
+            </div>
+
+            {/* Right side status */}
+            <div className="flex items-center gap-4">
+              {/* Database sync pill */}
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl border text-xs font-bold ${
+                isOffline 
+                  ? 'bg-amber-500/10 text-amber-500 border-amber-500/15' 
+                  : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/15'
+              }`}>
+                <Database className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">{isOffline ? 'Offline Mode (Local)' : 'Synced (Sheets DB)'}</span>
+              </div>
+
+              {/* Theme quick switcher */}
+              <button
+                onClick={() => setDarkMode(!darkMode)}
+                className="p-2 border border-slate-200 dark:border-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-xl transition-all cursor-pointer"
+              >
+                {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+              </button>
+            </div>
+          </header>
+
+          {/* Render Active tab content */}
+          <main className="flex-1 p-6 md:p-8 overflow-y-auto">
+            {renderTabContent()}
+          </main>
+        </div>
+      </div>
+
+      {/* Mobile Sidebar overlay Drawer */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <div className="fixed inset-0 z-50 flex md:hidden">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm"
+            />
+            
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+              className="relative w-72 bg-slate-900 border-r border-slate-800 text-slate-300 min-h-screen p-6 flex flex-col justify-between"
+            >
+              <div className="space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-lg">
+                      AS
+                    </div>
+                    <div>
+                      <h1 className="font-semibold text-white tracking-tight text-sm">Auction Sales</h1>
+                      <span className="text-[10px] text-slate-500 uppercase tracking-widest">Management</span>
+                    </div>
+                  </div>
+                  
+                  <button 
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="p-1 text-slate-400 hover:text-white cursor-pointer"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <nav className="space-y-2">
+                  {allowedMobileItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setActiveTab(item.id);
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                          isActive
+                            ? 'bg-blue-600 text-white'
+                            : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
+                        }`}
+                      >
+                        <Icon className="w-5 h-5" />
+                        <span>{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </nav>
+              </div>
+
+              <div className="border-t border-slate-800 pt-5">
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    handleLogout();
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
+                >
+                  <LogOut className="w-5 h-5" />
+                  <span>Logout</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Dynamic Alert Toasts Portal */}
+      <div className="fixed bottom-5 right-5 z-50 space-y-3 pointer-events-none w-full max-w-sm px-4">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, y: 20, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+              className={`p-4 rounded-2xl shadow-xl flex items-start gap-3 border pointer-events-auto bg-slate-900 border-slate-800`}
+            >
+              {toast.type === 'success' && <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />}
+              {toast.type === 'error' && <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />}
+              {toast.type === 'info' && <Info className="w-5 h-5 text-blue-400 shrink-0" />}
+              <div>
+                <h4 className="font-bold text-xs text-white uppercase tracking-wider">{toast.title}</h4>
+                <p className="text-xs text-slate-400 mt-1 font-semibold leading-normal">{toast.desc}</p>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
+    </div>
+  );
+}
