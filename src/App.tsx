@@ -21,7 +21,8 @@ import {
   Activity,
   ChevronDown,
   ChevronRight,
-  Truck
+  Truck,
+  PackageCheck
 } from 'lucide-react';
 import { User, ActionEntry, Supplier, SidebarTab } from './types';
 import {
@@ -38,6 +39,7 @@ import DashboardView from './components/DashboardView';
 import NewActionView from './components/NewActionView';
 import DispatchPlanningView from './components/DispatchPlanningView';
 import DispatchStatusView from './components/DispatchStatusView';
+import MaterialReceiptView from './components/MaterialReceiptView';
 import HistoryView from './components/HistoryView';
 import ReportsView from './components/ReportsView';
 import SettingsView from './components/SettingsView';
@@ -447,6 +449,15 @@ export default function App() {
             onAddToast={(type, title, desc) => addToast(type, title, desc)}
           />
         );
+      case 'material-receipt':
+        if (user.role === 'Sales') {
+          return <div className="p-8 text-center text-slate-500 font-semibold">Access Denied. Managerial clearance required.</div>;
+        }
+        return (
+          <MaterialReceiptView
+            onAddToast={(type, title, desc) => addToast(type, title, desc)}
+          />
+        );
       case 'history':
         return (
           <HistoryView 
@@ -490,6 +501,7 @@ export default function App() {
     { id: 'dashboard' as SidebarTab, label: 'Dashboard', icon: LayoutDashboard, roles: ['Admin', 'Sales', 'Manager'] },
     { id: 'new-action' as SidebarTab, label: 'New Action', icon: PlusCircle, roles: ['Admin', 'Sales'] },
     { id: 'pending' as SidebarTab, label: 'Dispatch', icon: Clock, roles: ['Admin', 'Manager'] },
+    { id: 'material-receipt' as SidebarTab, label: 'Material Receipt', icon: PackageCheck, roles: ['Admin', 'Manager'] },
     { id: 'history' as SidebarTab, label: 'History', icon: History, roles: ['Admin', 'Sales', 'Manager'] },
     { id: 'reports' as SidebarTab, label: 'Reports', icon: BarChart3, roles: ['Admin', 'Manager'] },
     { id: 'drive-folder' as SidebarTab, label: 'Shared Drive', icon: FolderOpen, roles: ['Admin', 'Sales', 'Manager'] },

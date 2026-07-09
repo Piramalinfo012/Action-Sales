@@ -725,13 +725,22 @@ export interface DispatchRecord {
   transportation: string;       // L  Transportation
   rupeesPerLtr: string;         // M  Rupies /ltr
   dispatchRemark: string;       // N  Remark
-  acDispatchStatus?: string;    // O  AC Dispatch Status
-  statusTimeDelay1?: string;    // P  Time Delay1
-  dispatchStatus?: string;      // Q  Dispatch Status
-  statusDispatchQty?: string;   // R  Dispatch QTY
-  statusDispatchDate?: string;  // S  Dispatch Date
-  invoiceVendor?: string;       // T  Upload Invoice Recievd From Vender
-  taxInvoiceWayBill?: string;   // U  Uplaod Tax Invoice With way Bill
+  acDispatchStatus?: string;    // P  AC Dispatch Status
+  statusTimeDelay1?: string;    // Q  Time Delay1
+  dispatchStatus?: string;      // R  Dispatch Status
+  statusDispatchQty?: string;   // S  Dispatch QTY
+  statusDispatchDate?: string;  // T  Dispatch Date
+  invoiceVendor?: string;       // U  Upload Invoice Recievd From Vender
+  taxInvoiceWayBill?: string;   // V  Uplaod Tax Invoice With way Bill
+  // Material Receipt Confirmation (columns W-AD)
+  plReceiptMaterial?: string;      // W  PL Reciept Material
+  acReceiptMaterial?: string;      // X  AC Reciept Material
+  receiptTimeDelay2?: string;      // Y  Time Delay2
+  uploadReceiving?: string;        // Z  Uplaod Recieving
+  shortageQty?: string;            // AA Shortage Qty (If Any)
+  creditNoteRequested?: string;    // AB Credit Note Requested by Party (If Any)
+  invoiceReviewDecision?: string;  // AC Invoice Review & Credit Note Decision
+  uploadVendorCreditNote?: string; // AD Upload Vendor Credit Note
 }
 
 const makeDispatchId = (allocationId: string): string => {
@@ -787,14 +796,23 @@ export async function getDispatchRows(): Promise<{ success: boolean; data: Dispa
         materialSuppliedFrom: str(row[10]),
         transportation: str(row[11]),
         rupeesPerLtr: str(row[12]),
-        dispatchRemark: str(row[13]),
-        acDispatchStatus: str(row[14]),
-        statusTimeDelay1: str(row[15]),
-        dispatchStatus: str(row[16]),
-        statusDispatchQty: str(row[17]),
-        statusDispatchDate: formatToDDMMYYYY(row[18]),
-        invoiceVendor: str(row[19]),
-        taxInvoiceWayBill: str(row[20])
+        dispatchRemark: str(row[13]),      // N  Remark
+        // O (row[14]) = "PI Dispatch Staus" — not a form field, skipped.
+        acDispatchStatus: str(row[15]),    // P  AC Dispatch Status
+        statusTimeDelay1: str(row[16]),    // Q  Time Delay1
+        dispatchStatus: str(row[17]),      // R  Dispatch Status
+        statusDispatchQty: str(row[18]),   // S  Dispatch QTY
+        statusDispatchDate: formatToDDMMYYYY(row[19]), // T  Dispatch Date
+        invoiceVendor: str(row[20]),       // U  Upload Invoice Recievd From Vender
+        taxInvoiceWayBill: str(row[21]),   // V  Uplaod Tax Invoice With way Bill
+        plReceiptMaterial: str(row[22]),      // W  PL Reciept Material
+        acReceiptMaterial: str(row[23]),      // X  AC Reciept Material
+        receiptTimeDelay2: str(row[24]),      // Y  Time Delay2
+        uploadReceiving: str(row[25]),        // Z  Uplaod Recieving
+        shortageQty: str(row[26]),            // AA Shortage Qty (If Any)
+        creditNoteRequested: str(row[27]),    // AB Credit Note Requested by Party (If Any)
+        invoiceReviewDecision: str(row[28]),  // AC Invoice Review & Credit Note Decision
+        uploadVendorCreditNote: str(row[29])  // AD Upload Vendor Credit Note
       });
     }
     return { success: true, data: rows };
@@ -868,14 +886,15 @@ export async function updateDispatchStatusInSheet(
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    // Column O ("PI Dispatch Staus") is left untouched. Columns are 1-indexed.
     const writes: Array<[number, any]> = [
-      [14, fields.acDispatchStatus],     // O
-      [15, fields.statusTimeDelay1],     // P
-      [16, fields.dispatchStatus],       // Q
-      [17, fields.statusDispatchQty],    // R
-      [18, fields.statusDispatchDate],   // S
-      [19, fields.invoiceVendor],        // T
-      [20, fields.taxInvoiceWayBill]     // U
+      [16, fields.acDispatchStatus],     // P  AC Dispatch Status (auto date)
+      [17, fields.statusTimeDelay1],     // Q  Time Delay1
+      [18, fields.dispatchStatus],       // R  Dispatch Status
+      [19, fields.statusDispatchQty],    // S  Dispatch QTY
+      [20, fields.statusDispatchDate],   // T  Dispatch Date
+      [21, fields.invoiceVendor],        // U  Upload Invoice Recievd From Vender
+      [22, fields.taxInvoiceWayBill]     // V  Uplaod Tax Invoice With way Bill
     ];
     for (const [col, val] of writes) {
       const r = await updateCellValue(DISPATCH_SHEET, rowIndex, col, val);
@@ -884,5 +903,40 @@ export async function updateDispatchStatusInSheet(
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || 'Network error updating dispatch status' };
+  }
+}
+
+// Update the Material Receipt Confirmation fields (columns X-AD). Column W
+// ("PL Reciept Material") is the trigger/planned value and is left untouched.
+export async function updateMaterialReceiptInSheet(
+  rowIndex: number,
+  fields: {
+    acReceiptMaterial: string;
+    receiptTimeDelay2: string;
+    uploadReceiving: string;
+    shortageQty: string;
+    creditNoteRequested: string;
+    invoiceReviewDecision: string;
+    uploadVendorCreditNote: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Columns are 1-indexed.
+    const writes: Array<[number, any]> = [
+      [24, fields.acReceiptMaterial],      // X  AC Reciept Material (auto date)
+      [25, fields.receiptTimeDelay2],      // Y  Time Delay2
+      [26, fields.uploadReceiving],        // Z  Uplaod Recieving
+      [27, fields.shortageQty],            // AA Shortage Qty (If Any)
+      [28, fields.creditNoteRequested],    // AB Credit Note Requested by Party (If Any)
+      [29, fields.invoiceReviewDecision],  // AC Invoice Review & Credit Note Decision
+      [30, fields.uploadVendorCreditNote]  // AD Upload Vendor Credit Note
+    ];
+    for (const [col, val] of writes) {
+      const r = await updateCellValue(DISPATCH_SHEET, rowIndex, col, val);
+      if (!r.success) return { success: false, error: r.error || 'Failed to update material receipt' };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error updating material receipt' };
   }
 }

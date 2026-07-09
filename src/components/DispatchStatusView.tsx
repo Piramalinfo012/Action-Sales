@@ -14,7 +14,10 @@ import {
   CheckCircle,
   FileText
 } from 'lucide-react';
-import { getDispatchRows, DispatchRecord, updateDispatchStatusInSheet } from '../api';
+import { getDispatchRows, DispatchRecord, updateDispatchStatusInSheet, API_URL } from '../api';
+
+const INVOICE_FOLDER_ID = '1HBi8BusMyDY_lQ1b7iJEJQvcuqayThu_';
+type UploadKey = 'invoiceVendor' | 'taxInvoiceWayBill';
 
 interface DispatchStatusViewProps {
   onAddToast?: (type: any, title: string, desc: string) => void;
@@ -24,6 +27,8 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
   const [rows, setRows] = useState<DispatchRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Active = status not yet updated; History = dispatch completed (status set)
+  const [viewFilter, setViewFilter] = useState<'active' | 'history' | 'all'>('active');
   
   // Modal state
   const [editingRow, setEditingRow] = useState<DispatchRecord | null>(null);
@@ -37,6 +42,76 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
     invoiceVendor: '',
     taxInvoiceWayBill: ''
   });
+
+  // Per-field file upload progress/metadata
+  const [uploads, setUploads] = useState<Record<UploadKey, { uploading: boolean; progress: number; fileName?: string; fileSize?: string }>>({
+    invoiceVendor: { uploading: false, progress: 0 },
+    taxInvoiceWayBill: { uploading: false, progress: 0 }
+  });
+
+  // Upload a file to Google Drive and store its URL in the matching field.
+  const processInvoiceFile = (file: File, key: UploadKey) => {
+    if (file.size > 5 * 1024 * 1024) {
+      onAddToast?.('error', 'File too large', 'Please upload a file under 5MB.');
+      return;
+    }
+    setUploads(prev => ({ ...prev, [key]: { uploading: true, progress: 10 } }));
+    const interval = setInterval(() => {
+      setUploads(prev => ({ ...prev, [key]: { ...prev[key], progress: Math.min(90, (prev[key].progress || 10) + 15) } }));
+    }, 150);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const formattedSize = file.size > 1024 * 1024
+        ? `${(file.size / (1024 * 1024)).toFixed(2)} MB`
+        : `${(file.size / 1024).toFixed(1)} KB`;
+      const fallbackUrl = `https://drive.google.com/drive/folders/${INVOICE_FOLDER_ID}`;
+      try {
+        const dataUrl = event.target?.result as string;
+        const base64Content = dataUrl.split(',')[1];
+        const body = new URLSearchParams();
+        body.append('action', 'uploadFile');
+        body.append('folderId', INVOICE_FOLDER_ID);
+        body.append('fileName', file.name);
+        body.append('base64Data', base64Content);
+        body.append('mimeType', file.type || 'application/octet-stream');
+        const response = await fetch(API_URL, { method: 'POST', body });
+        clearInterval(interval);
+        const resData = await response.json();
+
+        const findUrl = (obj: any): string | null => {
+          if (typeof obj === 'string' && (obj.startsWith('http://') || obj.startsWith('https://'))) return obj;
+          if (obj && typeof obj === 'object') {
+            for (const k of Object.keys(obj)) {
+              const f = findUrl(obj[k]);
+              if (f) return f;
+            }
+          }
+          return null;
+        };
+        const url = findUrl(resData);
+
+        if (resData.success && url) {
+          setFields(prev => ({ ...prev, [key]: url }));
+          setUploads(prev => ({ ...prev, [key]: { uploading: false, progress: 100, fileName: file.name, fileSize: formattedSize } }));
+        } else {
+          onAddToast?.('error', 'Upload Failed', resData.error || 'Google Drive upload failed. Saved folder link instead.');
+          setFields(prev => ({ ...prev, [key]: fallbackUrl }));
+          setUploads(prev => ({ ...prev, [key]: { uploading: false, progress: 100, fileName: file.name, fileSize: formattedSize } }));
+        }
+      } catch (err: any) {
+        clearInterval(interval);
+        onAddToast?.('error', 'Network Error', err.message || 'Upload failed.');
+        setUploads(prev => ({ ...prev, [key]: { uploading: false, progress: 0 } }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const clearUpload = (key: UploadKey) => {
+    setFields(prev => ({ ...prev, [key]: '' }));
+    setUploads(prev => ({ ...prev, [key]: { uploading: false, progress: 0 } }));
+  };
 
   const loadRows = async (notify = false, silent = false) => {
     if (!silent) setIsLoading(true);
@@ -118,8 +193,13 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
     if (!editingRow) return;
     setIsSaving(true);
 
+    // AC Dispatch Status auto-stamps today's date (DD/MM/YYYY).
+    const d = new Date();
+    const todayDDMM = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+
     const payload = {
       ...fields,
+      acDispatchStatus: todayDDMM,
       statusDispatchDate: formatDateForSave(fields.statusDispatchDate)
     };
 
@@ -136,14 +216,24 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
     loadRows(false, true);
   };
 
+  // A dispatch is "done" (goes to History) once its AC Dispatch Status is set,
+  // which is auto-stamped when the status update is saved.
+  const isDispatched = (r: DispatchRecord) => (r.acDispatchStatus || '').trim() !== '';
+
   const filtered = rows.filter((r) => {
     const q = search.toLowerCase();
-    return (
+    const matchesSearch =
       (r.companyName || '').toLowerCase().includes(q) ||
       (r.id || '').toLowerCase().includes(q) ||
-      (r.productName || '').toLowerCase().includes(q)
-    );
+      (r.productName || '').toLowerCase().includes(q);
+    const matchesView =
+      viewFilter === 'all' ||
+      (viewFilter === 'history' ? isDispatched(r) : !isDispatched(r));
+    return matchesSearch && matchesView;
   });
+
+  const activeCount = rows.filter((r) => !isDispatched(r)).length;
+  const historyCount = rows.filter((r) => isDispatched(r)).length;
 
   return (
     <div className="space-y-8 pb-12">
@@ -200,15 +290,45 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
             </p>
           </div>
 
-          <div className="w-full md:w-64 relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Search by company or product..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 glass-input rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-medium transition-all"
-            />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+            {/* Active vs History filter */}
+            <div className="flex bg-slate-100 dark:bg-slate-800/70 rounded-xl p-0.5 border border-slate-200/60 dark:border-slate-700/50 shrink-0">
+              {([
+                { key: 'active', label: 'Active', count: activeCount },
+                { key: 'history', label: 'History', count: historyCount },
+                { key: 'all', label: 'All', count: rows.length }
+              ] as const).map((opt) => {
+                const active = viewFilter === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setViewFilter(opt.key)}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                      active
+                        ? 'bg-white dark:bg-slate-900 shadow-sm text-indigo-600 dark:text-indigo-400'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <span>{opt.label}</span>
+                    <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${active ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400' : 'bg-slate-200/70 dark:bg-slate-700/60 text-slate-500 dark:text-slate-400'}`}>
+                      {opt.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="w-full md:w-56 relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search by company or product..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 glass-input rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-medium transition-all"
+              />
+            </div>
           </div>
         </div>
 
@@ -259,7 +379,11 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
                             <ClipboardList className="w-7 h-7" />
                           </div>
                           <p className="text-xs text-slate-400 dark:text-slate-500 font-medium max-w-xs">
-                            No active dispatch records found.
+                            {viewFilter === 'history'
+                              ? 'No dispatched records yet. Update a status and it will appear here.'
+                              : viewFilter === 'active'
+                                ? 'No pending dispatch records. All caught up!'
+                                : 'No dispatch records found.'}
                           </p>
                         </div>
                       </td>
@@ -446,30 +570,9 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
 
             <form onSubmit={handleSave} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
-                {/* AC Dispatch Status */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">AC Dispatch Status</label>
-                  <input
-                    type="text"
-                    value={fields.acDispatchStatus}
-                    onChange={(e) => setFields({ ...fields, acDispatchStatus: e.target.value })}
-                    placeholder="e.g. Dispatched, Arrived..."
-                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all"
-                  />
-                </div>
 
-                {/* Time Delay1 */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Time Delay1</label>
-                  <input
-                    type="text"
-                    value={fields.statusTimeDelay1}
-                    onChange={(e) => setFields({ ...fields, statusTimeDelay1: e.target.value })}
-                    placeholder="e.g. 2 Hrs, None..."
-                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all"
-                  />
-                </div>
+                {/* AC Dispatch Status and Time Delay1 are hidden from this form
+                    (values are still tracked in state / set on save). */}
 
                 {/* Dispatch Status */}
                 <div className="space-y-1.5">
@@ -513,35 +616,83 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
                 </div>
               </div>
 
-              {/* Uploads */}
+              {/* Uploads — file upload to Google Drive */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Upload Invoice Recievd From Vender</label>
-                  <div className="relative">
-                    <FileText className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                    <input
-                      type="text"
-                      value={fields.invoiceVendor}
-                      onChange={(e) => setFields({ ...fields, invoiceVendor: e.target.value })}
-                      placeholder="Enter drive link or file name..."
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all"
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Uplaod Tax Invoice With way Bill</label>
-                  <div className="relative">
-                    <FileText className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                    <input
-                      type="text"
-                      value={fields.taxInvoiceWayBill}
-                      onChange={(e) => setFields({ ...fields, taxInvoiceWayBill: e.target.value })}
-                      placeholder="Enter drive link or file name..."
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all"
-                    />
-                  </div>
-                </div>
+                {([
+                  { key: 'invoiceVendor', label: 'Upload Invoice Recievd From Vender' },
+                  { key: 'taxInvoiceWayBill', label: 'Uplaod Tax Invoice With way Bill' }
+                ] as const).map(({ key, label }) => {
+                  const up = uploads[key];
+                  const url = fields[key];
+                  const inputId = `dispatch-status-file-${key}`;
+                  return (
+                    <div key={key} className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">{label}</label>
+
+                      {/* Drag & drop / browse */}
+                      {!url && !up.uploading && (
+                        <div
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) processInvoiceFile(f, key); }}
+                          onClick={() => document.getElementById(inputId)?.click()}
+                          className="border border-dashed rounded-xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1.5 border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-600 bg-slate-50/50 dark:bg-slate-950/20"
+                        >
+                          <input
+                            id={inputId}
+                            type="file"
+                            className="hidden"
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f) processInvoiceFile(f, key); }}
+                            accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx"
+                          />
+                          <div className="p-1.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800">
+                            <FileText className="w-4 h-4 text-slate-400" />
+                          </div>
+                          <p className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
+                            Drag &amp; drop or <span className="text-indigo-500 font-bold">browse</span>
+                          </p>
+                          <p className="text-[8px] text-slate-400 dark:text-slate-500 font-semibold">PDF, JPG, PNG, Excel up to 5MB</p>
+                        </div>
+                      )}
+
+                      {/* Uploading */}
+                      {up.uploading && (
+                        <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-white dark:bg-slate-900 space-y-2">
+                          <div className="flex items-center justify-between text-[9px]">
+                            <span className="text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" /> Uploading…
+                            </span>
+                            <span className="text-slate-500 font-bold">{up.progress}%</span>
+                          </div>
+                          <div className="w-full bg-slate-100 dark:bg-slate-800 h-1 rounded-full overflow-hidden">
+                            <div className="bg-indigo-600 h-full rounded-full transition-all duration-150" style={{ width: `${up.progress}%` }} />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Uploaded card */}
+                      {url && !up.uploading && (
+                        <div className="border border-slate-100 dark:border-slate-800/80 rounded-xl p-2.5 bg-slate-50/50 dark:bg-slate-950/40 flex items-center justify-between gap-3 shadow-sm border-l-2 border-l-emerald-500">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="p-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0">
+                              <FileText className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[10px] font-bold text-slate-800 dark:text-slate-200 truncate max-w-[130px]">{up.fileName || 'Uploaded file'}</p>
+                              <div className="flex items-center gap-1">
+                                {up.fileSize && <span className="text-[8px] text-slate-400 font-semibold">{up.fileSize}</span>}
+                                <span className="text-[8px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5"><CheckCircle className="w-2.5 h-2.5" /> Ready</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button type="button" onClick={() => window.open(url, '_blank')} className="px-1.5 py-0.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-[8px] font-bold rounded-md border border-slate-200/60 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer">Get</button>
+                            <button type="button" onClick={() => clearUpload(key)} className="p-1 rounded-md bg-white dark:bg-slate-900 hover:bg-rose-50 text-rose-600 border border-slate-200/60 dark:border-slate-800 cursor-pointer"><X className="w-3 h-3" /></button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">

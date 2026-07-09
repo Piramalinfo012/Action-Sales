@@ -11,6 +11,7 @@ import {
   User,
   Shield,
   Activity,
+  PackageCheck,
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
@@ -30,6 +31,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
     { id: 'dashboard' as SidebarTab, label: 'Dashboard', icon: LayoutDashboard, roles: ['Admin', 'Sales', 'Manager'] },
     { id: 'new-action' as SidebarTab, label: 'Auction Ident', icon: PlusCircle, roles: ['Admin', 'Sales'] },
     { id: 'pending' as SidebarTab, label: 'Dispatch', icon: Truck, roles: ['Admin', 'Manager'] },
+    { id: 'material-receipt' as SidebarTab, label: 'Material Receipt', icon: PackageCheck, roles: ['Admin', 'Manager'] },
     { id: 'history' as SidebarTab, label: 'History', icon: History, roles: ['Admin', 'Sales', 'Manager'] },
     { id: 'reports' as SidebarTab, label: 'Reports', icon: BarChart3, roles: ['Admin', 'Manager'] },
     { id: 'drive-folder' as SidebarTab, label: 'Shared Drive', icon: FolderOpen, roles: ['Admin', 'Sales', 'Manager'] },
