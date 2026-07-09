@@ -48,7 +48,7 @@ export interface Supplier {
   uploadProgress?: number;    // UI-only: upload progress %
 }
 
-export type SidebarTab = 'dashboard' | 'new-action' | 'pending' | 'dispatch-status' | 'material-receipt' | 'history' | 'reports' | 'drive-folder' | 'settings';
+export type SidebarTab = 'dashboard' | 'new-action' | 'pending' | 'dispatch-status' | 'material-receipt' | 'credit-note' | 'payment-confirmation' | 'make-payment' | 'history' | 'reports' | 'drive-folder' | 'settings';
 
 export interface ToastMessage {
   id: string;

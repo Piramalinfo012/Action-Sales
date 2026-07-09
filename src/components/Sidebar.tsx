@@ -13,7 +13,11 @@ import {
   Activity,
   PackageCheck,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Wallet,
+  Receipt,
+  CheckCircle,
+  CreditCard
 } from 'lucide-react';
 import { SidebarTab, User as UserType } from '../types';
 
@@ -26,12 +30,14 @@ interface SidebarProps {
 
 export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: SidebarProps) {
   const [isDispatchOpen, setIsDispatchOpen] = useState(activeTab === 'pending' || activeTab === 'dispatch-status');
+  const [isAccountsOpen, setIsAccountsOpen] = useState(activeTab === 'credit-note' || activeTab === 'payment-confirmation' || activeTab === 'make-payment');
 
   const menuItems = [
     { id: 'dashboard' as SidebarTab, label: 'Dashboard', icon: LayoutDashboard, roles: ['Admin', 'Sales', 'Manager'] },
     { id: 'new-action' as SidebarTab, label: 'Auction Ident', icon: PlusCircle, roles: ['Admin', 'Sales'] },
     { id: 'pending' as SidebarTab, label: 'Dispatch', icon: Truck, roles: ['Admin', 'Manager'] },
     { id: 'material-receipt' as SidebarTab, label: 'Material Receipt', icon: PackageCheck, roles: ['Admin', 'Manager'] },
+    { id: 'accounts-group' as any, label: 'Accounts', icon: Wallet, roles: ['Admin', 'Manager'] },
     { id: 'history' as SidebarTab, label: 'History', icon: History, roles: ['Admin', 'Sales', 'Manager'] },
     { id: 'reports' as SidebarTab, label: 'Reports', icon: BarChart3, roles: ['Admin', 'Manager'] },
     { id: 'drive-folder' as SidebarTab, label: 'Shared Drive', icon: FolderOpen, roles: ['Admin', 'Sales', 'Manager'] },
@@ -101,28 +107,88 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
                   <div className="pl-12 pr-2 space-y-1 mt-1">
                     <button
                       onClick={() => setActiveTab('pending')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 cursor-pointer ${
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-all duration-300 cursor-pointer ${
                         activeTab === 'pending'
                           ? 'bg-blue-600 text-white shadow-md shadow-blue-600/15'
                           : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
                       }`}
                     >
-                      <Truck className="w-4 h-4" />
-                      <span>Dispatch Planning</span>
+                      <Truck className="w-4 h-4 shrink-0" />
+                      <span className="leading-tight">Dispatch Planning</span>
                     </button>
                     <button
                       onClick={() => setActiveTab('dispatch-status')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 cursor-pointer ${
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-all duration-300 cursor-pointer ${
                         activeTab === 'dispatch-status'
                           ? 'bg-blue-600 text-white shadow-md shadow-blue-600/15'
                           : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
                       }`}
                     >
-                      <Activity className="w-4 h-4" />
-                      <span>Dispatch Status</span>
+                      <Activity className="w-4 h-4 shrink-0" />
+                      <span className="leading-tight">Dispatch Status</span>
                     </button>
                   </div>
                 )}
+              </div>
+            );
+          }
+
+          if (item.id === 'accounts-group') {
+            const isAccountsActive = activeTab === 'credit-note' || activeTab === 'payment-confirmation' || activeTab === 'make-payment';
+            return (
+              <div key="accounts-group" className="space-y-1">
+                <button
+                  onClick={() => setIsAccountsOpen(!isAccountsOpen)}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer ${
+                    isAccountsActive && !isAccountsOpen
+                      ? 'bg-blue-600/10 text-blue-400'
+                      : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-3.5">
+                    <Wallet className={`w-5 h-5 transition-transform duration-300 ${isAccountsActive ? 'text-blue-400 scale-110' : ''}`} />
+                    <span>{item.label}</span>
+                  </div>
+                  {isAccountsOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                </button>
+                
+                {isAccountsOpen && (
+                  <div className="pl-12 pr-2 space-y-1 mt-1">
+                    <button
+                      onClick={() => setActiveTab('credit-note')}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-all duration-300 cursor-pointer ${
+                        activeTab === 'credit-note'
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/15'
+                          : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
+                      }`}
+                    >
+                      <Receipt className="w-4 h-4 shrink-0" />
+                      <span className="leading-tight">Credit Note Creation</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('payment-confirmation')}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-all duration-300 cursor-pointer ${
+                        activeTab === 'payment-confirmation'
+                            ? 'bg-blue-600 text-white shadow-md shadow-blue-600/15'
+                            : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
+                        }`}
+                      >
+                        <CheckCircle className="w-4 h-4 shrink-0" />
+                        <span className="leading-tight">Payment Confirmation</span>
+                      </button>
+                      <button
+                        onClick={() => setActiveTab('make-payment')}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-all duration-300 cursor-pointer ${
+                          activeTab === 'make-payment'
+                            ? 'bg-blue-600 text-white shadow-md shadow-blue-600/15'
+                            : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
+                        }`}
+                      >
+                        <CreditCard className="w-4 h-4 shrink-0" />
+                        <span className="leading-tight">Make Payment</span>
+                      </button>
+                    </div>
+                  )}
               </div>
             );
           }

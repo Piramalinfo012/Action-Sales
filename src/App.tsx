@@ -22,7 +22,9 @@ import {
   ChevronDown,
   ChevronRight,
   Truck,
-  PackageCheck
+  PackageCheck,
+  FileText,
+  CreditCard
 } from 'lucide-react';
 import { User, ActionEntry, Supplier, SidebarTab } from './types';
 import {
@@ -42,6 +44,9 @@ import DispatchStatusView from './components/DispatchStatusView';
 import MaterialReceiptView from './components/MaterialReceiptView';
 import HistoryView from './components/HistoryView';
 import ReportsView from './components/ReportsView';
+import CreditNoteView from './components/CreditNoteView';
+import PaymentConfirmView from './components/PaymentConfirmView';
+import MakePaymentView from './components/MakePaymentView';
 import SettingsView from './components/SettingsView';
 import LoginView from './components/LoginView';
 import DriveFolderView from './components/DriveFolderView';
@@ -458,6 +463,21 @@ export default function App() {
             onAddToast={(type, title, desc) => addToast(type, title, desc)}
           />
         );
+      case 'credit-note':
+        if (user.role === 'Sales') {
+          return <div className="p-8 text-center text-slate-500 font-semibold">Access Denied. Managerial clearance required.</div>;
+        }
+        return <CreditNoteView />;
+      case 'payment-confirmation':
+        if (user.role === 'Sales') {
+          return <div className="p-8 text-center text-slate-500 font-semibold">Access Denied. Managerial clearance required.</div>;
+        }
+        return <PaymentConfirmView />;
+      case 'make-payment':
+        if (user.role === 'Sales') {
+          return <div className="p-8 text-center text-slate-500 font-semibold">Access Denied. Managerial clearance required.</div>;
+        }
+        return <MakePaymentView />;
       case 'history':
         return (
           <HistoryView 
@@ -499,9 +519,12 @@ export default function App() {
   // Nav items list for mobile rendering
   const menuItems = [
     { id: 'dashboard' as SidebarTab, label: 'Dashboard', icon: LayoutDashboard, roles: ['Admin', 'Sales', 'Manager'] },
-    { id: 'new-action' as SidebarTab, label: 'New Action', icon: PlusCircle, roles: ['Admin', 'Sales'] },
-    { id: 'pending' as SidebarTab, label: 'Dispatch', icon: Clock, roles: ['Admin', 'Manager'] },
+    { id: 'pending' as SidebarTab, label: 'Dispatch Planning', icon: Truck, roles: ['Admin', 'Manager'] },
+    { id: 'dispatch-status' as SidebarTab, label: 'Dispatch Status', icon: Activity, roles: ['Admin', 'Manager'] },
     { id: 'material-receipt' as SidebarTab, label: 'Material Receipt', icon: PackageCheck, roles: ['Admin', 'Manager'] },
+    { id: 'credit-note' as SidebarTab, label: 'Credit Note Creation', icon: FileText, roles: ['Admin', 'Manager'] },
+    { id: 'payment-confirmation' as SidebarTab, label: 'Payment Confirmation', icon: CheckCircle, roles: ['Admin', 'Manager'] },
+    { id: 'make-payment' as SidebarTab, label: 'Make Payment', icon: CreditCard, roles: ['Admin', 'Manager'] },
     { id: 'history' as SidebarTab, label: 'History', icon: History, roles: ['Admin', 'Sales', 'Manager'] },
     { id: 'reports' as SidebarTab, label: 'Reports', icon: BarChart3, roles: ['Admin', 'Manager'] },
     { id: 'drive-folder' as SidebarTab, label: 'Shared Drive', icon: FolderOpen, roles: ['Admin', 'Sales', 'Manager'] },

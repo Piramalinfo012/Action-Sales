@@ -26,6 +26,7 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
   const [rows, setRows] = useState<DispatchRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
 
   const [editingRow, setEditingRow] = useState<DispatchRecord | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -43,6 +44,21 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
     uploadReceiving: { uploading: false, progress: 0 },
     uploadVendorCreditNote: { uploading: false, progress: 0 }
   });
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr || dateStr.trim() === '') return '—';
+    if (!dateStr.includes('T') && dateStr.includes('/')) return dateStr;
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
+    } catch {
+      return dateStr;
+    }
+  };
 
   const loadRows = async (notify = false, silent = false) => {
     if (!silent) setIsLoading(true);
@@ -186,6 +202,10 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
   };
 
   const filtered = rows.filter((r) => {
+    const isReceived = (r.acReceiptMaterial || '').trim() !== '';
+    if (activeTab === 'pending' && isReceived) return false;
+    if (activeTab === 'history' && !isReceived) return false;
+
     const q = search.toLowerCase();
     return (
       (r.companyName || '').toLowerCase().includes(q) ||
@@ -317,7 +337,7 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
             <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
               Receipt Queue
               <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/15 px-2 py-0.5 rounded-full">
-                {rows.length} record{rows.length !== 1 ? 's' : ''}
+                {filtered.length} record{filtered.length !== 1 ? 's' : ''}
               </span>
             </h3>
             <p className="text-xs font-medium text-slate-400 dark:text-slate-500">
@@ -325,7 +345,31 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
             </p>
           </div>
 
-          <div className="w-full md:w-64 relative">
+          <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full md:w-auto">
+            <div className="flex bg-slate-100/50 dark:bg-slate-800/50 p-1 rounded-xl">
+              <button
+                onClick={() => setActiveTab('pending')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'pending'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
+              >
+                Active
+              </button>
+              <button
+                onClick={() => setActiveTab('history')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'history'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
+              >
+                History
+              </button>
+            </div>
+
+            <div className="w-full md:w-64 relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
             <input
               type="text"
@@ -336,8 +380,9 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
             />
           </div>
         </div>
+      </div>
 
-        <div className="overflow-x-auto -mx-6 md:-mx-8">
+      <div className="overflow-x-auto -mx-6 md:-mx-8">
           <div className="inline-block min-w-full align-middle px-6 md:px-8">
             <div className="overflow-hidden border border-slate-100 dark:border-slate-800/80 rounded-2xl">
               <table className="min-w-full divide-y divide-slate-100 dark:divide-slate-800">
@@ -400,7 +445,7 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
                           {r.statusDispatchDate ? (
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200/60 dark:border-amber-500/20">
                               <Calendar className="w-3.5 h-3.5 text-amber-500" />
-                              {r.statusDispatchDate}
+                              {formatDate(r.statusDispatchDate)}
                             </span>
                           ) : <span className="text-xs text-slate-400">—</span>}
                         </td>
@@ -421,7 +466,7 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
                           ) : <span className="text-xs text-slate-400">—</span>}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
-                          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{r.plReceiptMaterial || '—'}</span>
+                          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{formatDate(r.plReceiptMaterial || '')}</span>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
                           {(r.acReceiptMaterial || '').trim() ? (
@@ -482,25 +527,14 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
               <h4 className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-3">Dispatch Details</h4>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-[11px]">
                 <div><span className="block text-slate-400 font-bold uppercase tracking-wider text-[9px]">Dispatch Qty</span><span className="font-bold text-slate-800 dark:text-slate-200">{editingRow.dispatchQuantity || '—'}</span></div>
-                <div><span className="block text-slate-400 font-bold uppercase tracking-wider text-[9px]">Dispatch Date</span><span className="font-bold text-slate-800 dark:text-slate-200">{editingRow.statusDispatchDate || '—'}</span></div>
-                <div><span className="block text-slate-400 font-bold uppercase tracking-wider text-[9px]">PL Receipt</span><span className="font-bold text-slate-800 dark:text-slate-200">{editingRow.plReceiptMaterial || '—'}</span></div>
+                <div><span className="block text-slate-400 font-bold uppercase tracking-wider text-[9px]">Dispatch Date</span><span className="font-bold text-slate-800 dark:text-slate-200">{formatDate(editingRow.statusDispatchDate || '')}</span></div>
+                <div><span className="block text-slate-400 font-bold uppercase tracking-wider text-[9px]">PL Receipt</span><span className="font-bold text-slate-800 dark:text-slate-200">{formatDate(editingRow.plReceiptMaterial || '')}</span></div>
               </div>
             </div>
 
             <form onSubmit={handleSave} className="space-y-4">
               {/* AC Reciept Material is auto-stamped on save (hidden). */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Time Delay2</label>
-                  <input
-                    type="text"
-                    value={fields.receiptTimeDelay2}
-                    onChange={(e) => setFields({ ...fields, receiptTimeDelay2: e.target.value })}
-                    placeholder="e.g. 2 Days, None..."
-                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-semibold transition-all"
-                  />
-                </div>
-
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Shortage Qty (If Any)</label>
                   <input

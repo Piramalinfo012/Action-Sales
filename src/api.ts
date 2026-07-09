@@ -741,6 +741,12 @@ export interface DispatchRecord {
   creditNoteRequested?: string;    // AB Credit Note Requested by Party (If Any)
   invoiceReviewDecision?: string;  // AC Invoice Review & Credit Note Decision
   uploadVendorCreditNote?: string; // AD Upload Vendor Credit Note
+  // Credit Note Creation (columns AE-AI)
+  plCreditNote?: string;           // AE PI Credit Note
+  acCreditNote?: string;           // AF Ac Credit Note
+  creditNoteTimeDelay1?: string;   // AG Time Delay1
+  uploadCreditNotePPPL?: string;   // AH Uplaod Credit Note issued By PPPL
+  creditNoteMailCustomer?: string; // AI Creadint Not Mail To Customer
 }
 
 const makeDispatchId = (allocationId: string): string => {
@@ -812,7 +818,12 @@ export async function getDispatchRows(): Promise<{ success: boolean; data: Dispa
         shortageQty: str(row[26]),            // AA Shortage Qty (If Any)
         creditNoteRequested: str(row[27]),    // AB Credit Note Requested by Party (If Any)
         invoiceReviewDecision: str(row[28]),  // AC Invoice Review & Credit Note Decision
-        uploadVendorCreditNote: str(row[29])  // AD Upload Vendor Credit Note
+        uploadVendorCreditNote: str(row[29]), // AD Upload Vendor Credit Note
+        plCreditNote: str(row[30]),           // AE PI Credit Note
+        acCreditNote: str(row[31]),           // AF Ac Credit Note
+        creditNoteTimeDelay1: str(row[32]),   // AG Time Delay1
+        uploadCreditNotePPPL: str(row[33]),   // AH Uplaod Credit Note issued By PPPL
+        creditNoteMailCustomer: str(row[34])  // AI Creadint Not Mail To Customer
       });
     }
     return { success: true, data: rows };
@@ -938,5 +949,34 @@ export async function updateMaterialReceiptInSheet(
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || 'Network error updating material receipt' };
+  }
+}
+
+// Update the Credit Note Creation fields (columns AF-AI). Column AE
+// ("PI Credit Note") is the trigger/planned value and is left untouched.
+export async function updateCreditNoteInSheet(
+  rowIndex: number,
+  fields: {
+    acCreditNote: string;
+    creditNoteTimeDelay1: string;
+    uploadCreditNotePPPL: string;
+    creditNoteMailCustomer: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Columns are 1-indexed.
+    const writes: Array<[number, any]> = [
+      [32, fields.acCreditNote],             // AF Ac Credit Note (auto date)
+      [33, fields.creditNoteTimeDelay1],     // AG Time Delay1
+      [34, fields.uploadCreditNotePPPL],     // AH Uplaod Credit Note issued By PPPL
+      [35, fields.creditNoteMailCustomer],   // AI Creadint Not Mail To Customer
+    ];
+    for (const [col, val] of writes) {
+      const r = await updateCellValue(DISPATCH_SHEET, rowIndex, col, val);
+      if (!r.success) return { success: false, error: r.error || 'Failed to update credit note' };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error updating credit note' };
   }
 }
