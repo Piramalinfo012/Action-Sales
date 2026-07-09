@@ -19,10 +19,13 @@ import {
   CheckCircle2,
   XCircle,
   HelpCircle,
-  Clock3
+  Clock3,
+  Users,
+  Trash2,
+  Layers
 } from 'lucide-react';
-import { ActionEntry, User as UserType } from '../types';
-import { getProductsFromMasterSheet, getOfflineProducts, API_URL } from '../api';
+import { ActionEntry, Supplier, User as UserType } from '../types';
+import { getProductsFromMasterSheet, getOfflineProducts, getSuppliersForEntry, API_URL } from '../api';
 
 interface NewActionViewProps {
   onAddAction: (entry: ActionEntry) => Promise<boolean>;
@@ -43,7 +46,8 @@ interface NewActionViewProps {
     purchaseRate?: string,
     uploadPoCopy?: string,
     paymentTerms?: string,
-    shortageCondition?: string
+    shortageCondition?: string,
+    suppliers?: Supplier[]
   ) => Promise<boolean>;
 }
 
@@ -63,6 +67,29 @@ export default function NewActionView({
   // Table search state
   const [listSearchTerm, setListSearchTerm] = useState('');
 
+  // L1 Confirmation status filter
+  const [l1StatusFilter, setL1StatusFilter] = useState<'all' | 'completed' | 'pending'>('all');
+
+  // Derive an entry's L1 status the same way the status badge does.
+  const getL1Status = (action: ActionEntry): 'completed' | 'pending' | 'notscheduled' => {
+    if (action.actual1 && action.actual1.trim().length > 0) return 'completed';
+    if (action.planned1 && action.planned1.trim().length > 0) return 'pending';
+    return 'notscheduled';
+  };
+
+  // Shared row filter: search text + selected L1 status.
+  const matchesFilters = (action: ActionEntry): boolean => {
+    const lower = listSearchTerm.toLowerCase();
+    const matchesSearch =
+      (action.id || '').toLowerCase().includes(lower) ||
+      (action.companyName || '').toLowerCase().includes(lower) ||
+      (action.productName || '').toLowerCase().includes(lower) ||
+      (action.location || '').toLowerCase().includes(lower) ||
+      (action.timestamp || '').toLowerCase().includes(lower);
+    const matchesStatus = l1StatusFilter === 'all' || getL1Status(action) === l1StatusFilter;
+    return matchesSearch && matchesStatus;
+  };
+
   // L1 Confirmation edit states
   const [l1EditingEntry, setL1EditingEntry] = useState<ActionEntry | null>(null);
   const [l1Planned1, setL1Planned1] = useState('');
@@ -71,22 +98,52 @@ export default function NewActionView({
   const [l1AreWeL1, setL1AreWeL1] = useState('Yes');
   const [isL1Saving, setIsL1Saving] = useState(false);
 
+  // Supplier details viewer (read-only) — shows all suppliers from Purchase Allocation
+  const [supplierModalEntry, setSupplierModalEntry] = useState<ActionEntry | null>(null);
+  const [supplierModalList, setSupplierModalList] = useState<Supplier[]>([]);
+  const [supplierModalLoading, setSupplierModalLoading] = useState(false);
+
+  const handleViewSuppliers = async (action: ActionEntry) => {
+    setSupplierModalEntry(action);
+    setSupplierModalList([]);
+    setSupplierModalLoading(true);
+    try {
+      const list = await getSuppliersForEntry(action.id);
+      setSupplierModalList(list);
+    } catch {
+      setSupplierModalList([]);
+    } finally {
+      setSupplierModalLoading(false);
+    }
+  };
+
   // Purchase Allocation states
   const [l1WillPurchase, setL1WillPurchase] = useState('No');
-  const [l1SupplierName, setL1SupplierName] = useState('');
-  const [l1PurchaseQuantity, setL1PurchaseQuantity] = useState('');
-  const [l1PurchaseRate, setL1PurchaseRate] = useState('');
-  const [l1UploadPoCopy, setL1UploadPoCopy] = useState('');
-  const [l1PaymentTerms, setL1PaymentTerms] = useState('');
-  const [l1ShortageCondition, setL1ShortageCondition] = useState('');
   const [l1TimeDelay2, setL1TimeDelay2] = useState('0 days');
 
-  // File Upload states for PO Copy
-  const [poCopyMode, setPoCopyMode] = useState<'upload' | 'link'>('upload');
-  const [isUploadingPo, setIsUploadingPo] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadedPoFile, setUploadedPoFile] = useState<{ name: string; size: string; dataUrl: string; type?: string } | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  // Multi-supplier allocation: an order can be split across several suppliers
+  // (e.g. 300 = 100 + 100 + 100). Each supplier holds its own PO copy & terms.
+  const [l1Suppliers, setL1Suppliers] = useState<Supplier[]>([]);
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+
+  // Factory for a fresh empty supplier row
+  const makeBlankSupplier = (): Supplier => ({
+    supplierName: '',
+    purchaseQuantity: '',
+    purchaseRate: '',
+    uploadPoCopy: '',
+    paymentTerms: '',
+    shortageCondition: '',
+    poMode: 'upload'
+  });
+
+  // Immutable helpers for the supplier list
+  const updateSupplier = (index: number, patch: Partial<Supplier>) => {
+    setL1Suppliers(prev => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)));
+  };
+  const addSupplier = () => setL1Suppliers(prev => [...prev, makeBlankSupplier()]);
+  const removeSupplier = (index: number) =>
+    setL1Suppliers(prev => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
 
   // Helper to generate the next sequential ID based on existing actions list
   const generateSequentialID = () => {
@@ -244,80 +301,76 @@ export default function NewActionView({
     }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
-    setIsDragging(true);
+    setDraggingIndex(index);
   };
 
   const handleDragLeave = () => {
-    setIsDragging(false);
+    setDraggingIndex(null);
   };
 
-  const handleFileDrop = (e: React.DragEvent) => {
+  const handleFileDrop = (e: React.DragEvent, index: number) => {
     e.preventDefault();
-    setIsDragging(false);
+    setDraggingIndex(null);
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      processFile(files[0]);
+      processSupplierFile(files[0], index);
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      processFile(files[0]);
+      processSupplierFile(files[0], index);
     }
   };
 
-  const processFile = (file: File) => {
+  // Upload a PO copy for a specific supplier row and store the resulting URL on it.
+  const processSupplierFile = (file: File, index: number) => {
     if (file.size > 5 * 1024 * 1024) {
       alert("File size exceeds 5MB limit. Please upload a smaller file.");
       return;
     }
 
-    setIsUploadingPo(true);
-    setUploadProgress(10);
+    updateSupplier(index, { isUploading: true, uploadProgress: 10 });
 
     const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 90) {
-          clearInterval(interval);
-          return 90;
-        }
-        return prev + 15;
-      });
+      setL1Suppliers(prev => prev.map((s, i) =>
+        i === index ? { ...s, uploadProgress: Math.min(90, (s.uploadProgress || 10) + 15) } : s
+      ));
     }, 150);
 
     const reader = new FileReader();
     reader.onload = async (event) => {
-      const formattedSize = file.size > 1024 * 1024 
-        ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` 
+      const formattedSize = file.size > 1024 * 1024
+        ? `${(file.size / (1024 * 1024)).toFixed(2)} MB`
         : `${(file.size / 1024).toFixed(1)} KB`;
+
+      const fallbackUrl = `https://drive.google.com/drive/folders/1HBi8BusMyDY_lQ1b7iJEJQvcuqayThu_`;
 
       try {
         const dataUrl = event.target?.result as string;
-        
         const base64Content = dataUrl.split(',')[1];
-        
-        // Call Apps Script uploadFile action
-        const response = await fetch(`${API_URL}?action=uploadFile`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            folderId: '1HBi8BusMyDY_lQ1b7iJEJQvcuqayThu_',
-            fileName: file.name,
-            fileData: base64Content,
-            mimeType: file.type || 'application/octet-stream'
-          })
-        });
+
+        // Call Apps Script uploadFile action.
+        // NOTE: Apps Script only reads params from e.parameter (query string or
+        // form-encoded body), NOT from a JSON body. We also must avoid the
+        // 'application/json' content-type, which triggers a CORS preflight that
+        // Apps Script cannot answer. So we send form-urlencoded fields whose keys
+        // exactly match the backend (base64Data, fileName, mimeType, folderId).
+        const uploadBody = new URLSearchParams();
+        uploadBody.append('action', 'uploadFile');
+        uploadBody.append('folderId', '1HBi8BusMyDY_lQ1b7iJEJQvcuqayThu_');
+        uploadBody.append('fileName', file.name);
+        uploadBody.append('base64Data', base64Content);
+        uploadBody.append('mimeType', file.type || 'application/octet-stream');
+
+        const response = await fetch(API_URL, { method: 'POST', body: uploadBody });
 
         clearInterval(interval);
-        setUploadProgress(100);
-
         const resData = await response.json();
-        
+
         // Find URL in response
         const findUrlInObject = (obj: any): string | null => {
           if (typeof obj === 'string' && (obj.startsWith('http://') || obj.startsWith('https://'))) {
@@ -325,8 +378,7 @@ export default function NewActionView({
           }
           if (obj && typeof obj === 'object') {
             for (const key of Object.keys(obj)) {
-              const val = obj[key];
-              const found = findUrlInObject(val);
+              const found = findUrlInObject(obj[key]);
               if (found) return found;
             }
           }
@@ -336,57 +388,38 @@ export default function NewActionView({
         const driveUrl = findUrlInObject(resData);
 
         if (resData.success && driveUrl) {
-          const fileObj = {
-            name: file.name,
-            size: formattedSize,
-            dataUrl: driveUrl,
-            type: file.type
-          };
-          setUploadedPoFile(fileObj);
-          setL1UploadPoCopy(driveUrl);
-        } else if (resData.error && resData.error.includes("Sheet 'Data' not found")) {
-          // Alert user to create sheet 'Data' if missing
-          alert(`Google Drive Upload successful, but your Google Spreadsheet is missing a sheet tab named 'Data' to record the upload logs.\n\nPlease add an empty sheet tab named 'Data' in your Google Spreadsheet to prevent this error message.\n\n(We have generated a search link in your Drive folder so you can save and proceed!)`);
-          
-          const searchUrl = `https://drive.google.com/drive/folders/1HBi8BusMyDY_lQ1b7iJEJQvcuqayThu_`;
-          const fileObj = {
-            name: file.name,
-            size: formattedSize,
-            dataUrl: searchUrl,
-            type: file.type
-          };
-          setUploadedPoFile(fileObj);
-          setL1UploadPoCopy(searchUrl);
+          updateSupplier(index, {
+            uploadPoCopy: driveUrl,
+            poFileName: file.name,
+            poFileSize: formattedSize,
+            poMode: 'upload',
+            isUploading: false,
+            uploadProgress: 100
+          });
         } else {
           const errorMsg = resData.error || "Unknown error";
           alert(`Google Drive upload failed: ${errorMsg}. Falling back to your shared folder link.`);
-          
-          const searchUrl = `https://drive.google.com/drive/folders/1HBi8BusMyDY_lQ1b7iJEJQvcuqayThu_`;
-          const fileObj = {
-            name: file.name,
-            size: formattedSize,
-            dataUrl: searchUrl,
-            type: file.type
-          };
-          setUploadedPoFile(fileObj);
-          setL1UploadPoCopy(searchUrl);
+          updateSupplier(index, {
+            uploadPoCopy: fallbackUrl,
+            poFileName: file.name,
+            poFileSize: formattedSize,
+            poMode: 'upload',
+            isUploading: false,
+            uploadProgress: 100
+          });
         }
       } catch (err: any) {
         clearInterval(interval);
         console.error("Upload error:", err);
         alert(`Network error uploading to Google Drive: ${err.message}. Falling back to your shared folder link.`);
-        
-        const searchUrl = `https://drive.google.com/drive/folders/1HBi8BusMyDY_lQ1b7iJEJQvcuqayThu_`;
-        const fileObj = {
-          name: file.name,
-          size: formattedSize,
-          dataUrl: searchUrl,
-          type: file.type
-        };
-        setUploadedPoFile(fileObj);
-        setL1UploadPoCopy(searchUrl);
-      } finally {
-        setIsUploadingPo(false);
+        updateSupplier(index, {
+          uploadPoCopy: fallbackUrl,
+          poFileName: file.name,
+          poFileSize: formattedSize,
+          poMode: 'upload',
+          isUploading: false,
+          uploadProgress: 100
+        });
       }
     };
     reader.readAsDataURL(file);
@@ -394,33 +427,18 @@ export default function NewActionView({
 
   const handleViewPoCopy = (action: ActionEntry) => {
     if (!action.uploadPoCopy) return;
-    
-    const savedFileJson = localStorage.getItem(`fms_uploaded_file_${action.id}`);
-    if (savedFileJson) {
-      try {
-        const parsed = JSON.parse(savedFileJson);
-        if (parsed.dataUrl) {
-          const link = document.createElement('a');
-          link.href = parsed.dataUrl;
-          link.download = parsed.name || 'po_copy';
-          link.target = '_blank';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          return;
-        }
-      } catch (e) {
-        console.error("Error opening uploaded file:", e);
-      }
+
+    // Multiple suppliers store their PO links newline-joined; open each real URL.
+    const parts = action.uploadPoCopy.split('\n').map(s => s.trim()).filter(Boolean);
+    const urls = parts.filter(p => p.startsWith('http://') || p.startsWith('https://'));
+    if (urls.length > 0) {
+      urls.forEach(u => window.open(u, '_blank'));
+      return;
     }
-    
-    const text = action.uploadPoCopy.trim();
-    if (text.startsWith('http://') || text.startsWith('https://')) {
-      window.open(text, '_blank');
-    } else {
-      const cleaned = text.startsWith('📄') ? text.slice(1).trim() : text;
-      alert(`PO Copy Detail: ${cleaned}\n\n(Local file binary data is only accessible on the browser/device that uploaded it).`);
-    }
+
+    const text = (parts[0] || action.uploadPoCopy).trim();
+    const cleaned = text.startsWith('📄') ? text.slice(1).trim() : text;
+    alert(`PO Copy Detail: ${cleaned}\n\n(Local file binary data is only accessible on the browser/device that uploaded it).`);
   };
 
   const handleOpenL1Modal = (entry: ActionEntry) => {
@@ -430,34 +448,87 @@ export default function NewActionView({
     setL1TimeDelay1(entry.timeDelay1 || '');
     setL1AreWeL1(entry.areWeL1 || 'Yes');
     setL1WillPurchase(entry.willPurchase || 'No');
-    setL1SupplierName(entry.supplierName || '');
-    setL1PurchaseQuantity(entry.purchaseQuantity || '');
-    setL1PurchaseRate(entry.purchaseRate || '');
-    setL1UploadPoCopy(entry.uploadPoCopy || '');
-    setL1PaymentTerms(entry.paymentTerms || '');
-    setL1ShortageCondition(entry.shortageCondition || '');
     setL1TimeDelay2(entry.timeDelay2 || '0 days');
 
-    // Load file upload details if any
-    const savedFileJson = localStorage.getItem(`fms_uploaded_file_${entry.id}`);
-    if (savedFileJson) {
-      try {
-        const parsed = JSON.parse(savedFileJson);
-        setUploadedPoFile(parsed);
-        setPoCopyMode('upload');
-      } catch (e) {
-        setUploadedPoFile(null);
-        setPoCopyMode('link');
-      }
-    } else {
-      setUploadedPoFile(null);
-      // If it looks like a URL, go to link mode. Else default to upload
-      if (entry.uploadPoCopy && (entry.uploadPoCopy.trim().startsWith('http') || entry.uploadPoCopy.trim().includes('://') || !entry.uploadPoCopy.startsWith('📄'))) {
-        setPoCopyMode('link');
-      } else {
-        setPoCopyMode('upload');
-      }
+    // Reconstruct the supplier list from the newline-joined sheet columns.
+    const splitField = (v?: string) => (v ? String(v).split('\n') : []);
+    const names = splitField(entry.supplierName);
+    const qtys = splitField(entry.purchaseQuantity);
+    const rates = splitField(entry.purchaseRate);
+    const pos = splitField(entry.uploadPoCopy);
+    const terms = splitField(entry.paymentTerms);
+    const shortages = splitField(entry.shortageCondition);
+    const count = Math.max(names.length, qtys.length, rates.length, pos.length, terms.length, shortages.length);
+
+    const parsed: Supplier[] = [];
+    for (let i = 0; i < count; i++) {
+      const po = (pos[i] || '').trim();
+      parsed.push({
+        supplierName: names[i] || '',
+        purchaseQuantity: qtys[i] || '',
+        purchaseRate: rates[i] || '',
+        uploadPoCopy: po,
+        paymentTerms: terms[i] || '',
+        shortageCondition: shortages[i] || '',
+        poMode: po.startsWith('http') || po.includes('://') ? 'link' : 'upload'
+      });
     }
+
+    // Restore uploaded-file display metadata (name/size/mode) saved per supplier.
+    try {
+      const savedMeta = localStorage.getItem(`fms_suppliers_${entry.id}`);
+      if (savedMeta) {
+        const meta = JSON.parse(savedMeta);
+        if (Array.isArray(meta)) {
+          meta.forEach((m: any, i: number) => {
+            if (parsed[i]) {
+              if (m.poFileName) parsed[i].poFileName = m.poFileName;
+              if (m.poFileSize) parsed[i].poFileSize = m.poFileSize;
+              if (m.poMode) parsed[i].poMode = m.poMode;
+            }
+          });
+        }
+      }
+    } catch {
+      // ignore metadata parse errors
+    }
+
+    setL1Suppliers(parsed.length > 0 ? parsed : [makeBlankSupplier()]);
+    setDraggingIndex(null);
+
+    // The 'Purchase Allocation' sheet is the source of truth for suppliers now,
+    // so load the authoritative list from there (falls back to the FMS-parsed
+    // list above if offline or nothing is stored yet).
+    getSuppliersForEntry(entry.id)
+      .then((allocSuppliers) => {
+        if (!allocSuppliers || allocSuppliers.length === 0) return;
+
+        // Restore uploaded-file display metadata (name/size) saved locally, by index.
+        let meta: any[] = [];
+        try {
+          const raw = localStorage.getItem(`fms_suppliers_${entry.id}`);
+          if (raw) meta = JSON.parse(raw) || [];
+        } catch {
+          // ignore metadata parse errors
+        }
+
+        const restored: Supplier[] = allocSuppliers.map((s, i) => {
+          const po = (s.uploadPoCopy || '').trim();
+          return {
+            ...s,
+            uploadPoCopy: po,
+            poMode: 'upload',
+            poFileName: meta[i]?.poFileName || (po ? 'PO Copy' : undefined),
+            poFileSize: meta[i]?.poFileSize
+          };
+        });
+
+        setL1Suppliers(restored);
+        setL1WillPurchase('Yes');
+      })
+      .catch(() => {
+        // offline or allocation sheet unavailable — keep the FMS-parsed list
+      });
   };
 
   const handleL1Submit = async (e: React.FormEvent) => {
@@ -490,26 +561,39 @@ export default function NewActionView({
 
     // Determine final cleared values based on selections
     const finalWillPurchase = l1AreWeL1 === 'Yes' ? l1WillPurchase : 'No';
-    const finalSupplierName = (l1AreWeL1 === 'Yes' && finalWillPurchase === 'Yes') ? l1SupplierName : '';
-    const finalPurchaseQuantity = (l1AreWeL1 === 'Yes' && finalWillPurchase === 'Yes') ? l1PurchaseQuantity : '';
-    const finalPurchaseRate = (l1AreWeL1 === 'Yes' && finalWillPurchase === 'Yes') ? l1PurchaseRate : '';
-    
-    let finalUploadPoCopy = '';
-    if (l1AreWeL1 === 'Yes' && finalWillPurchase === 'Yes') {
-      if (poCopyMode === 'upload' && uploadedPoFile) {
-        finalUploadPoCopy = uploadedPoFile.dataUrl;
-        localStorage.setItem(`fms_uploaded_file_${l1EditingEntry.id}`, JSON.stringify(uploadedPoFile));
-      } else {
-        finalUploadPoCopy = l1UploadPoCopy;
-        localStorage.removeItem(`fms_uploaded_file_${l1EditingEntry.id}`);
-      }
-    } else {
-      localStorage.removeItem(`fms_uploaded_file_${l1EditingEntry.id}`);
-    }
+    const purchasing = l1AreWeL1 === 'Yes' && finalWillPurchase === 'Yes';
 
-    const finalPaymentTerms = (l1AreWeL1 === 'Yes' && finalWillPurchase === 'Yes') ? l1PaymentTerms : '';
-    const finalShortageCondition = (l1AreWeL1 === 'Yes' && finalWillPurchase === 'Yes') ? l1ShortageCondition : '';
-    const finalTimeDelay2 = (l1AreWeL1 === 'Yes' && finalWillPurchase === 'Yes') ? l1TimeDelay2 : '';
+    // Keep single-line values so every supplier occupies exactly one line per column.
+    const sanitize = (v: any) => String(v ?? '').replace(/\r?\n/g, ' ').trim();
+
+    // Only keep suppliers that have at least a name or a quantity.
+    const activeSuppliers = purchasing
+      ? l1Suppliers.filter(s => sanitize(s.supplierName) || sanitize(s.purchaseQuantity))
+      : [];
+
+    const joinField = (key: keyof Supplier) => activeSuppliers.map(s => sanitize(s[key])).join('\n');
+
+    const finalSupplierName = joinField('supplierName');
+    const finalPurchaseQuantity = joinField('purchaseQuantity');
+    const finalPurchaseRate = joinField('purchaseRate');
+    const finalUploadPoCopy = joinField('uploadPoCopy');
+    const finalPaymentTerms = joinField('paymentTerms');
+    const finalShortageCondition = joinField('shortageCondition');
+    const finalTimeDelay2 = purchasing ? l1TimeDelay2 : '';
+
+    // Persist per-supplier uploaded-file display metadata (name/size/mode).
+    if (activeSuppliers.length > 0) {
+      localStorage.setItem(
+        `fms_suppliers_${l1EditingEntry.id}`,
+        JSON.stringify(activeSuppliers.map(s => ({
+          poFileName: s.poFileName || '',
+          poFileSize: s.poFileSize || '',
+          poMode: s.poMode || 'upload'
+        })))
+      );
+    } else {
+      localStorage.removeItem(`fms_suppliers_${l1EditingEntry.id}`);
+    }
 
     const success = await onUpdateL1Confirmation(
       l1EditingEntry.rowIndex || 0,
@@ -525,7 +609,8 @@ export default function NewActionView({
       finalPurchaseRate,
       finalUploadPoCopy,
       finalPaymentTerms,
-      finalShortageCondition
+      finalShortageCondition,
+      activeSuppliers
     );
     setIsL1Saving(false);
     if (success) {
@@ -534,27 +619,69 @@ export default function NewActionView({
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-12">
+    <div className="space-y-8 pb-12">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
-        <div className="space-y-1">
-          <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-            Create & Manage Entries
-          </h2>
-          <p className="text-slate-500 dark:text-slate-400 text-xs font-medium">
-            Log new auction records and update their L1 confirmations in real-time.
-          </p>
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="relative overflow-hidden rounded-3xl border border-slate-200/70 dark:border-slate-800/80 bg-gradient-to-br from-white via-slate-50 to-blue-50/40 dark:from-slate-900 dark:via-slate-900 dark:to-blue-950/20 p-6 md:p-7"
+      >
+        <div aria-hidden className="absolute -right-10 -top-14 w-52 h-52 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
+        <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-600/25 shrink-0">
+              <Layers className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-xl md:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+                Create & Manage Entries
+              </h2>
+              <p className="text-slate-500 dark:text-slate-400 text-xs font-medium max-w-md">
+                Log new auction records and update their L1 confirmations in real-time.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* KPI chips */}
+            {(() => {
+              const total = actions.length;
+              const completed = actions.filter(a => a.actual1 && a.actual1.trim().length > 0).length;
+              const pending = actions.filter(a => a.planned1 && a.planned1.trim().length > 0 && !(a.actual1 && a.actual1.trim().length > 0)).length;
+              const chips = [
+                { label: 'Total', value: total, dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400' },
+                { label: 'Completed', value: completed, dot: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400' },
+                { label: 'Pending', value: pending, dot: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400' }
+              ];
+              return (
+                <div className="hidden sm:flex items-center gap-2">
+                  {chips.map(c => (
+                    <div key={c.label} className="flex items-center gap-2 bg-white/70 dark:bg-slate-950/50 border border-slate-200/70 dark:border-slate-800 rounded-xl px-3 py-2 backdrop-blur-sm">
+                      <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+                      <div className="leading-none">
+                        <span className={`text-sm font-black ${c.text}`}>{c.value}</span>
+                        <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-0.5">{c.label}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
+            <motion.button
+              onClick={() => setIsFormOpen(true)}
+              whileHover={{ scale: 1.04, y: -2 }}
+              whileTap={{ scale: 0.97 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 18 }}
+              className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-600/20 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Create Auction</span>
+            </motion.button>
+          </div>
         </div>
-        <div>
-          <button
-            onClick={() => setIsFormOpen(true)}
-            className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl shadow-lg shadow-blue-600/10 hover:shadow-blue-600/20 transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>Create Auction</span>
-          </button>
-        </div>
-      </div>
+      </motion.div>
 
       {/* Log Entry Overlay Modal */}
       {isFormOpen && (
@@ -829,32 +956,72 @@ export default function NewActionView({
       <div className="glass-card rounded-3xl p-6 md:p-8 relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div className="space-y-1">
-            <h3 className="text-lg font-bold text-slate-800 dark:text-white">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
               Filled Auction Entries
+              <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 border border-blue-500/15 px-2 py-0.5 rounded-full">
+                {actions.length} record{actions.length !== 1 ? 's' : ''}
+              </span>
             </h3>
             <p className="text-xs font-medium text-slate-400 dark:text-slate-500">
               Select any filled record below to update its L1 Confirmation values.
             </p>
           </div>
 
-          {/* Quick Search */}
-          <div className="w-full md:w-80 relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Search by company, product or ID..."
-              value={listSearchTerm}
-              onChange={(e) => setListSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 glass-input rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-medium transition-all"
-            />
-            {listSearchTerm && (
-              <button 
-                onClick={() => setListSearchTerm('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
-              >
-                Clear
-              </button>
-            )}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+            {/* L1 Status Filter */}
+            <div className="flex bg-slate-100 dark:bg-slate-800/70 rounded-xl p-0.5 border border-slate-200/60 dark:border-slate-700/50 shrink-0">
+              {([
+                { key: 'all', label: 'All' },
+                { key: 'pending', label: 'Pending' },
+                { key: 'completed', label: 'Completed' }
+              ] as const).map((opt) => {
+                const count = opt.key === 'all'
+                  ? actions.length
+                  : actions.filter(a => getL1Status(a) === opt.key).length;
+                const active = l1StatusFilter === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setL1StatusFilter(opt.key)}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                      active
+                        ? 'bg-white dark:bg-slate-900 shadow-sm text-blue-600 dark:text-blue-400'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    {opt.key === 'pending' && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
+                    {opt.key === 'completed' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                    <span>{opt.label}</span>
+                    <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${
+                      active ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-slate-200/70 dark:bg-slate-700/60 text-slate-500 dark:text-slate-400'
+                    }`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Quick Search */}
+            <div className="w-full md:w-72 relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search by company, product or ID..."
+                value={listSearchTerm}
+                onChange={(e) => setListSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 glass-input rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-medium transition-all"
+              />
+              {listSearchTerm && (
+                <button
+                  onClick={() => setListSearchTerm('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -863,57 +1030,50 @@ export default function NewActionView({
           <div className="inline-block min-w-full align-middle px-6 md:px-8">
             <div className="overflow-hidden border border-slate-100 dark:border-slate-800/80 rounded-2xl">
               <table className="min-w-full divide-y divide-slate-100 dark:divide-slate-800">
-                <thead className="bg-slate-50/50 dark:bg-slate-900/50">
+                <thead className="bg-gradient-to-b from-slate-50 to-slate-100/40 dark:from-slate-900/70 dark:to-slate-900/40">
                   <tr>
-                    <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                    <th className="px-4 py-3.5 text-left text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                       ID / Date
                     </th>
-                    <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                    <th className="px-4 py-3.5 text-left text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                       Company & Product
                     </th>
-                    <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                    <th className="px-4 py-3.5 text-left text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                       Qty / Unit
                     </th>
-                    <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                    <th className="px-4 py-3.5 text-left text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                       Location
                     </th>
-                    <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                    <th className="px-4 py-3.5 text-left text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                       L1 Confirmation Details
                     </th>
-                    <th className="px-4 py-3.5 text-right text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                    <th className="px-4 py-3.5 text-right text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                       Auction
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 bg-transparent">
                   {[...actions]
-                    .filter(action => {
-                      const lower = listSearchTerm.toLowerCase();
-                      return (
-                        (action.id || '').toLowerCase().includes(lower) ||
-                        (action.companyName || '').toLowerCase().includes(lower) ||
-                        (action.productName || '').toLowerCase().includes(lower) ||
-                        (action.location || '').toLowerCase().includes(lower) ||
-                        (action.timestamp || '').toLowerCase().includes(lower)
-                      );
-                    })
+                    .filter(matchesFilters)
                     .reverse() // Display newest entries on top
                     .map((action) => {
                       const hasL1 = action.areWeL1 && action.areWeL1.trim().length > 0;
                       const isL1Yes = action.areWeL1 && action.areWeL1.toLowerCase() === 'yes';
 
                       return (
-                        <tr 
-                          key={action.id} 
-                          className="hover:bg-slate-50/30 dark:hover:bg-slate-800/20 transition-colors"
+                        <tr
+                          key={action.id}
+                          className="group hover:bg-blue-50/40 dark:hover:bg-slate-800/30 transition-colors relative"
                         >
                           {/* ID / Date */}
-                          <td className="px-4 py-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap relative">
+                            <span className="absolute left-0 top-1/2 -translate-y-1/2 h-8 w-0.5 rounded-full bg-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
                             <div className="space-y-1">
-                              <div className="text-xs font-mono font-bold text-blue-600 dark:text-blue-400">
+                              <div className="text-[11px] font-mono font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/8 border border-blue-500/15 rounded-md px-1.5 py-0.5 w-fit">
                                 {action.id}
                               </div>
-                              <div className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold">
+                              <div className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold flex items-center gap-1">
+                                <Calendar className="w-2.5 h-2.5" />
                                 {action.timestamp}
                               </div>
                             </div>
@@ -921,13 +1081,18 @@ export default function NewActionView({
 
                           {/* Company / Product */}
                           <td className="px-4 py-4">
-                            <div className="space-y-1 max-w-xs">
-                              <div className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
-                                {action.companyName}
+                            <div className="flex items-center gap-2.5 max-w-xs">
+                              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/15 to-indigo-500/15 border border-blue-500/10 flex items-center justify-center text-[11px] font-black text-blue-600 dark:text-blue-400 shrink-0 uppercase">
+                                {(action.companyName || '?').trim().charAt(0)}
                               </div>
-                              <div className="text-[11px] text-slate-400 dark:text-slate-400 truncate flex items-center gap-1 font-medium">
-                                <Box className="w-3 h-3 text-slate-400 shrink-0" />
-                                <span>{action.productName}</span>
+                              <div className="space-y-0.5 min-w-0">
+                                <div className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+                                  {action.companyName}
+                                </div>
+                                <div className="text-[11px] text-slate-400 dark:text-slate-400 truncate flex items-center gap-1 font-medium">
+                                  <Box className="w-3 h-3 text-slate-400 shrink-0" />
+                                  <span>{action.productName}</span>
+                                </div>
                               </div>
                             </div>
                           </td>
@@ -944,7 +1109,8 @@ export default function NewActionView({
 
                           {/* Location */}
                           <td className="px-4 py-4 whitespace-nowrap">
-                            <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                            <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                              <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                               {action.location}
                             </div>
                           </td>
@@ -982,19 +1148,21 @@ export default function NewActionView({
                                 }
                               })()}
 
-                              {/* Detailed values hidden per user request */}
-                              {action.uploadPoCopy && action.uploadPoCopy.trim().length > 0 && (
+                              {/* View all supplier allocation details (from Purchase Allocation sheet) */}
+                              {((action.uploadPoCopy && action.uploadPoCopy.trim().length > 0) ||
+                                (action.willPurchase && action.willPurchase.toLowerCase() === 'yes') ||
+                                (action.supplierName && action.supplierName.trim().length > 0)) && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleViewPoCopy(action);
+                                    handleViewSuppliers(action);
                                   }}
                                   className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-blue-50/70 hover:bg-blue-100/90 dark:bg-blue-950/30 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-400 border border-blue-100/50 dark:border-blue-900/30 transition-all cursor-pointer"
-                                  title="Click to download/open PO Copy"
+                                  title="View all supplier details"
                                 >
                                   <FileText className="w-3 h-3" />
-                                  <span>View PO</span>
+                                  <span>View Details</span>
                                 </button>
                               )}
                             </div>
@@ -1004,9 +1172,9 @@ export default function NewActionView({
                           <td className="px-4 py-4 whitespace-nowrap text-right">
                             <button
                               onClick={() => handleOpenL1Modal(action)}
-                              className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 text-[11px] font-bold rounded-xl transition-all flex items-center gap-1 ml-auto cursor-pointer"
+                              className="px-3.5 py-1.5 bg-white dark:bg-slate-800/80 hover:bg-blue-600 dark:hover:bg-blue-600 text-slate-700 dark:text-slate-200 hover:text-white dark:hover:text-white text-[11px] font-bold rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-600 shadow-sm hover:shadow-md hover:shadow-blue-600/20 transition-all flex items-center gap-1.5 ml-auto cursor-pointer group/btn"
                             >
-                              <Clock3 className="w-3.5 h-3.5 text-blue-500" />
+                              <Clock3 className="w-3.5 h-3.5 text-blue-500 group-hover/btn:text-white transition-colors" />
                               <span>L1 Confirmation</span>
                             </button>
                           </td>
@@ -1014,18 +1182,19 @@ export default function NewActionView({
                       );
                     })}
 
-                  {actions.filter(action => {
-                    const lower = listSearchTerm.toLowerCase();
-                    return (
-                      (action.id || '').toLowerCase().includes(lower) ||
-                      (action.companyName || '').toLowerCase().includes(lower) ||
-                      (action.productName || '').toLowerCase().includes(lower) ||
-                      (action.location || '').toLowerCase().includes(lower)
-                    );
-                  }).length === 0 && (
+                  {actions.filter(matchesFilters).length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-xs text-slate-400 dark:text-slate-500 italic">
-                        No transactions logged yet or matched your search. Click "Log New Entry" to create one.
+                      <td colSpan={6} className="px-6 py-14 text-center">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center text-slate-400">
+                            <Search className="w-7 h-7" />
+                          </div>
+                          <p className="text-xs text-slate-400 dark:text-slate-500 font-medium max-w-xs">
+                            {l1StatusFilter !== 'all'
+                              ? `No ${l1StatusFilter} entries found. Try a different filter.`
+                              : 'No transactions logged yet or matched your search. Click "Create Auction" to create one.'}
+                          </p>
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -1049,7 +1218,7 @@ export default function NewActionView({
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="relative bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 rounded-3xl max-w-md w-full shadow-2xl p-6 overflow-y-auto max-h-[90vh] z-10 space-y-6"
+            className="relative bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 rounded-3xl max-w-3xl w-full shadow-2xl p-6 sm:p-8 overflow-y-auto max-h-[90vh] z-10 space-y-6"
           >
             <div className="flex items-start justify-between">
               <div className="space-y-1.5">
@@ -1210,249 +1379,278 @@ export default function NewActionView({
                   </motion.div>
                 )}
 
-                {/* Purchase Allocation Form Fields */}
+                {/* Purchase Allocation Form Fields — supports splitting one order across multiple suppliers */}
                 {l1AreWeL1 === 'Yes' && l1WillPurchase === 'Yes' && (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, y: -5 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800/80"
                   >
                     <div className="bg-blue-500/5 border border-blue-500/10 rounded-2xl p-3 space-y-3">
-                      <h4 className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Purchase Allocation Details</span>
-                      </h4>
-
-                      {/* Supplier Name */}
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
-                          Supplier Name
-                        </label>
-                        <input
-                          type="text"
-                          value={l1SupplierName}
-                          onChange={(e) => setL1SupplierName(e.target.value)}
-                          placeholder="Enter Supplier Name"
-                          required
-                          className="w-full px-3 py-2 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-semibold"
-                        />
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-1">
+                          <Users className="w-3.5 h-3.5" />
+                          <span>Purchase Allocation Details</span>
+                        </h4>
+                        <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500">
+                          {l1Suppliers.length} supplier{l1Suppliers.length !== 1 ? 's' : ''}
+                        </span>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2">
-                        {/* Purchase Quantity */}
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
-                            Purchase Qty
-                          </label>
-                          <input
-                            type="number"
-                            step="any"
-                            value={l1PurchaseQuantity}
-                            onChange={(e) => setL1PurchaseQuantity(e.target.value)}
-                            placeholder="Qty"
-                            required
-                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-semibold"
-                          />
-                        </div>
-
-                        {/* Purchase Rate */}
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
-                            Purchase Rate
-                          </label>
-                          <input
-                            type="number"
-                            step="any"
-                            value={l1PurchaseRate}
-                            onChange={(e) => setL1PurchaseRate(e.target.value)}
-                            placeholder="Rate"
-                            required
-                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-semibold"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Upload Po Copy */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
-                            PO Copy (URL or File Upload)
-                          </label>
-                          
-                          {/* Mode Toggle Tabs */}
-                          <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 border border-slate-200/50 dark:border-slate-700/50">
-                            <button
-                              type="button"
-                              onClick={() => setPoCopyMode('upload')}
-                              className={`px-2 py-0.5 rounded-md text-[9px] font-bold transition-all cursor-pointer ${
-                                poCopyMode === 'upload'
-                                  ? 'bg-white dark:bg-slate-900 shadow-sm text-blue-650 font-extrabold dark:text-blue-400'
-                                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                              }`}
-                            >
-                              Upload File
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setPoCopyMode('link')}
-                              className={`px-2 py-0.5 rounded-md text-[9px] font-bold transition-all cursor-pointer ${
-                                poCopyMode === 'link'
-                                  ? 'bg-white dark:bg-slate-900 shadow-sm text-blue-655 font-extrabold dark:text-blue-400'
-                                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                              }`}
-                            >
-                              Web Link / Text
-                            </button>
-                          </div>
-                        </div>
-
-                        {poCopyMode === 'upload' ? (
-                          <div className="space-y-2">
-                            {/* Drag & Drop Zone */}
-                            {!uploadedPoFile && !isUploadingPo && (
+                      {/* Allocation tracker: order qty vs. total allocated across suppliers */}
+                      {(() => {
+                        const orderQty = l1EditingEntry?.quntity || 0;
+                        const allocated = l1Suppliers.reduce((sum, s) => sum + (parseFloat(s.purchaseQuantity) || 0), 0);
+                        const remaining = orderQty - allocated;
+                        const pct = orderQty > 0 ? Math.min(100, (allocated / orderQty) * 100) : 0;
+                        const over = remaining < 0;
+                        return (
+                          <div className="bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 rounded-xl p-2.5 space-y-2">
+                            <div className="flex items-center justify-between text-[10px] font-bold">
+                              <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                <Layers className="w-3 h-3" /> Allocated
+                              </span>
+                              <span className="text-slate-800 dark:text-slate-200 tabular-nums">
+                                {allocated.toLocaleString()} / {orderQty.toLocaleString()} {l1EditingEntry?.unit || ''}
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
                               <div
-                                onDragOver={handleDragOver}
-                                onDragLeave={handleDragLeave}
-                                onDrop={handleFileDrop}
-                                className={`border border-dashed rounded-xl p-4 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-1.5 ${
-                                  isDragging
-                                    ? 'border-blue-500 bg-blue-50/20 dark:bg-blue-950/10'
-                                    : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-950/20'
-                                }`}
-                                onClick={() => document.getElementById('po-file-input')?.click()}
+                                className={`h-full rounded-full transition-all duration-300 ${over ? 'bg-rose-500' : pct >= 100 ? 'bg-emerald-500' : 'bg-blue-600'}`}
+                                style={{ width: `${over ? 100 : pct}%` }}
+                              />
+                            </div>
+                            <div className={`text-[9px] font-bold ${over ? 'text-rose-500' : remaining === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                              {over
+                                ? `Over-allocated by ${Math.abs(remaining).toLocaleString()} ${l1EditingEntry?.unit || ''}`
+                                : remaining === 0 && orderQty > 0
+                                  ? 'Fully allocated ✓'
+                                  : `Remaining: ${remaining.toLocaleString()} ${l1EditingEntry?.unit || ''}`}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Supplier cards — two-column form layout on wider screens */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {l1Suppliers.map((sup, idx) => (
+                        <motion.div
+                          key={idx}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.25 }}
+                          className="bg-white dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800 rounded-xl p-3 space-y-3 relative"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-extrabold text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                              <span className="w-5 h-5 rounded-lg bg-blue-500/10 flex items-center justify-center text-[9px]">{idx + 1}</span>
+                              Supplier {idx + 1}
+                            </span>
+                            {l1Suppliers.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeSupplier(idx)}
+                                className="p-1 rounded-md text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 border border-transparent hover:border-rose-200/60 dark:hover:border-rose-900/40 transition-all cursor-pointer"
+                                title="Remove this supplier"
                               >
-                                <input
-                                  id="po-file-input"
-                                  type="file"
-                                  className="hidden"
-                                  onChange={handleFileChange}
-                                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx"
-                                />
-                                <div className="p-1.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-850">
-                                  <FileText className="w-4 h-4 text-slate-400" />
-                                </div>
-                                <div className="space-y-0.5">
-                                  <p className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
-                                    Drag & drop file or <span className="text-blue-500 hover:underline font-bold">browse</span>
-                                  </p>
-                                  <p className="text-[8px] text-slate-400 dark:text-slate-500 font-semibold">
-                                    PDF, JPG, PNG, Excel up to 5MB
-                                  </p>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Uploading State */}
-                            {isUploadingPo && (
-                              <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-white dark:bg-slate-900 space-y-2">
-                                <div className="flex items-center justify-between text-[9px]">
-                                  <span className="text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1.5 animate-pulse">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
-                                    Uploading PO Copy...
-                                  </span>
-                                  <span className="text-slate-500 font-bold">{uploadProgress}%</span>
-                                </div>
-                                <div className="w-full bg-slate-100 dark:bg-slate-800 h-1 rounded-full overflow-hidden">
-                                  <div 
-                                    className="bg-blue-600 h-full rounded-full transition-all duration-150" 
-                                    style={{ width: `${uploadProgress}%` }}
-                                  />
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Uploaded File View Card */}
-                            {uploadedPoFile && !isUploadingPo && (
-                              <div className="border border-slate-100 dark:border-slate-800/80 rounded-xl p-2.5 bg-slate-50/50 dark:bg-slate-950/40 flex items-center justify-between gap-3 shadow-sm border-l-2 border-l-emerald-500">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <div className="p-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0">
-                                    <FileText className="w-4 h-4" />
-                                  </div>
-                                  <div className="min-w-0 space-y-0.5">
-                                    <p className="text-[10px] font-bold text-slate-800 dark:text-slate-200 truncate max-w-[130px]">
-                                      {uploadedPoFile.name}
-                                    </p>
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-[8px] text-slate-400 font-semibold">{uploadedPoFile.size}</span>
-                                      <span className="w-0.5 h-0.5 rounded-full bg-slate-300" />
-                                      <span className="text-[8px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5">
-                                        <Check className="w-2.5 h-2.5" /> Ready
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const link = document.createElement('a');
-                                      link.href = uploadedPoFile.dataUrl;
-                                      link.download = uploadedPoFile.name;
-                                      link.click();
-                                    }}
-                                    className="px-1.5 py-0.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-[8px] font-bold rounded-md border border-slate-200/60 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer"
-                                  >
-                                    Get
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setUploadedPoFile(null);
-                                      setL1UploadPoCopy('');
-                                    }}
-                                    className="p-1 rounded-md bg-white dark:bg-slate-900 hover:bg-rose-50 text-rose-600 border border-slate-200/60 dark:border-slate-800 cursor-pointer"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              </div>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             )}
                           </div>
-                        ) : (
-                          /* Paste Link Input */
-                          <div className="relative">
+
+                          {/* Supplier Name */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                              Supplier Name
+                            </label>
                             <input
                               type="text"
-                              value={l1UploadPoCopy.startsWith('📄') ? '' : l1UploadPoCopy}
-                              onChange={(e) => setL1UploadPoCopy(e.target.value)}
-                              placeholder="Paste Google Drive, OneDrive Link or enter details..."
+                              value={sup.supplierName}
+                              onChange={(e) => updateSupplier(idx, { supplierName: e.target.value })}
+                              placeholder="Enter Supplier Name"
                               className="w-full px-3 py-2 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-semibold"
                             />
                           </div>
-                        )}
+
+                          <div className="grid grid-cols-2 gap-2">
+                            {/* Purchase Quantity */}
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                                Purchase Qty
+                              </label>
+                              <input
+                                type="number"
+                                step="any"
+                                value={sup.purchaseQuantity}
+                                onChange={(e) => updateSupplier(idx, { purchaseQuantity: e.target.value })}
+                                placeholder="Qty"
+                                className="w-full px-3 py-2 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-semibold"
+                              />
+                            </div>
+
+                            {/* Purchase Rate */}
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                                Purchase Rate
+                              </label>
+                              <input
+                                type="number"
+                                step="any"
+                                value={sup.purchaseRate}
+                                onChange={(e) => updateSupplier(idx, { purchaseRate: e.target.value })}
+                                placeholder="Rate"
+                                className="w-full px-3 py-2 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-semibold"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Upload Po Copy */}
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                              PO Copy (File Upload)
+                            </label>
+
+                            <div className="space-y-2">
+                                {/* Drag & Drop Zone */}
+                                {!sup.uploadPoCopy && !sup.isUploading && (
+                                  <div
+                                    onDragOver={(e) => handleDragOver(e, idx)}
+                                    onDragLeave={handleDragLeave}
+                                    onDrop={(e) => handleFileDrop(e, idx)}
+                                    className={`border border-dashed rounded-xl p-4 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-1.5 ${
+                                      draggingIndex === idx
+                                        ? 'border-blue-500 bg-blue-50/20 dark:bg-blue-950/10'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-950/20'
+                                    }`}
+                                    onClick={() => document.getElementById(`po-file-input-${idx}`)?.click()}
+                                  >
+                                    <input
+                                      id={`po-file-input-${idx}`}
+                                      type="file"
+                                      className="hidden"
+                                      onChange={(e) => handleFileChange(e, idx)}
+                                      accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx"
+                                    />
+                                    <div className="p-1.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-850">
+                                      <FileText className="w-4 h-4 text-slate-400" />
+                                    </div>
+                                    <div className="space-y-0.5">
+                                      <p className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
+                                        Drag & drop file or <span className="text-blue-500 hover:underline font-bold">browse</span>
+                                      </p>
+                                      <p className="text-[8px] text-slate-400 dark:text-slate-500 font-semibold">
+                                        PDF, JPG, PNG, Excel up to 5MB
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Uploading State */}
+                                {sup.isUploading && (
+                                  <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-white dark:bg-slate-900 space-y-2">
+                                    <div className="flex items-center justify-between text-[9px]">
+                                      <span className="text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1.5 animate-pulse">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
+                                        Uploading PO Copy...
+                                      </span>
+                                      <span className="text-slate-500 font-bold">{sup.uploadProgress || 0}%</span>
+                                    </div>
+                                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-1 rounded-full overflow-hidden">
+                                      <div
+                                        className="bg-blue-600 h-full rounded-full transition-all duration-150"
+                                        style={{ width: `${sup.uploadProgress || 0}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Uploaded File View Card */}
+                                {sup.uploadPoCopy && !sup.isUploading && (
+                                  <div className="border border-slate-100 dark:border-slate-800/80 rounded-xl p-2.5 bg-slate-50/50 dark:bg-slate-950/40 flex items-center justify-between gap-3 shadow-sm border-l-2 border-l-emerald-500">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <div className="p-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0">
+                                        <FileText className="w-4 h-4" />
+                                      </div>
+                                      <div className="min-w-0 space-y-0.5">
+                                        <p className="text-[10px] font-bold text-slate-800 dark:text-slate-200 truncate max-w-[130px]">
+                                          {sup.poFileName || 'PO Copy'}
+                                        </p>
+                                        <div className="flex items-center gap-1">
+                                          {sup.poFileSize && <span className="text-[8px] text-slate-400 font-semibold">{sup.poFileSize}</span>}
+                                          <span className="w-0.5 h-0.5 rounded-full bg-slate-300" />
+                                          <span className="text-[8px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5">
+                                            <Check className="w-2.5 h-2.5" /> Ready
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      {sup.uploadPoCopy && (
+                                        <button
+                                          type="button"
+                                          onClick={() => window.open(sup.uploadPoCopy, '_blank')}
+                                          className="px-1.5 py-0.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-[8px] font-bold rounded-md border border-slate-200/60 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer"
+                                        >
+                                          Get
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => updateSupplier(idx, { uploadPoCopy: '', poFileName: undefined, poFileSize: undefined, uploadProgress: 0 })}
+                                        className="p-1 rounded-md bg-white dark:bg-slate-900 hover:bg-rose-50 text-rose-600 border border-slate-200/60 dark:border-slate-800 cursor-pointer"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                            </div>
+                          </div>
+
+                          {/* Payment Terms and Condition */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                              Payment Terms & Conditions
+                            </label>
+                            <textarea
+                              rows={2}
+                              value={sup.paymentTerms}
+                              onChange={(e) => updateSupplier(idx, { paymentTerms: e.target.value })}
+                              placeholder="e.g. Within 1 to 2 weeks"
+                              className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-semibold resize-none"
+                            />
+                          </div>
+
+                          {/* Shortage Condition */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                              Shortage Condition
+                            </label>
+                            <textarea
+                              rows={2}
+                              value={sup.shortageCondition}
+                              onChange={(e) => updateSupplier(idx, { shortageCondition: e.target.value })}
+                              placeholder="Enter shortage condition..."
+                              className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-semibold resize-none"
+                            />
+                          </div>
+                        </motion.div>
+                      ))}
                       </div>
 
-                      {/* Payment Terms and Condition */}
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
-                          Payment Terms & Conditions
-                        </label>
-                        <textarea
-                          rows={2}
-                          value={l1PaymentTerms}
-                          onChange={(e) => setL1PaymentTerms(e.target.value)}
-                          placeholder="e.g. Within 1 to 2 weeks"
-                          className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-semibold resize-none"
-                        />
-                      </div>
+                      {/* Add Supplier button */}
+                      <button
+                        type="button"
+                        onClick={addSupplier}
+                        className="w-full py-2.5 rounded-xl border border-dashed border-blue-300 dark:border-blue-800/60 text-blue-600 dark:text-blue-400 text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-blue-50/60 dark:hover:bg-blue-950/20 transition-all cursor-pointer"
+                      >
+                        <PlusCircle className="w-4 h-4" />
+                        Add Another Supplier
+                      </button>
 
-                      {/* Shortage Condition */}
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
-                          Shortage Condition
-                        </label>
-                        <textarea
-                          rows={2}
-                          value={l1ShortageCondition}
-                          onChange={(e) => setL1ShortageCondition(e.target.value)}
-                          placeholder="Enter shortage condition..."
-                          className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-semibold resize-none"
-                        />
-                      </div>
-
-                      {/* Time Delay 2 */}
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                      {/* Time Delay 2 (order level) */}
+                      <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-slate-800/80">
+                        <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block pt-2">
                           Time Delay 2
                         </label>
                         <input
@@ -1487,6 +1685,125 @@ export default function NewActionView({
                 </button>
               </div>
             </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Supplier Allocation Details (read-only) Modal */}
+      {supplierModalEntry && (
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-slate-900/60 dark:bg-black/70 backdrop-blur-sm transition-opacity"
+            onClick={() => setSupplierModalEntry(null)}
+          />
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="relative bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 rounded-3xl max-w-2xl w-full shadow-2xl p-6 sm:p-8 overflow-y-auto max-h-[90vh] z-10 space-y-5"
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-600/25 shrink-0">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800 dark:text-white">Supplier Allocation Details</h3>
+                  <p className="text-[11px] text-slate-400 font-semibold">
+                    {supplierModalEntry.companyName} · {supplierModalEntry.id} · {Number(supplierModalEntry.quntity).toLocaleString()} {supplierModalEntry.unit}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSupplierModalEntry(null)}
+                className="p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {supplierModalLoading ? (
+              <div className="py-12 flex flex-col items-center gap-3 text-slate-400">
+                <div className="w-8 h-8 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+                <p className="text-xs font-semibold">Loading supplier details…</p>
+              </div>
+            ) : supplierModalList.length === 0 ? (
+              <div className="py-12 flex flex-col items-center gap-3 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center text-slate-400">
+                  <Users className="w-7 h-7" />
+                </div>
+                <p className="text-xs text-slate-400 dark:text-slate-500 font-medium max-w-xs">
+                  No supplier allocation found for this entry in the Purchase Allocation sheet.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Allocation summary */}
+                {(() => {
+                  const total = supplierModalList.reduce((sum, x) => sum + (parseFloat(x.purchaseQuantity) || 0), 0);
+                  return (
+                    <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 py-3">
+                      <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5" /> {supplierModalList.length} supplier{supplierModalList.length !== 1 ? 's' : ''}
+                      </span>
+                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                        Allocated {total.toLocaleString()} {supplierModalEntry.unit}
+                      </span>
+                    </div>
+                  );
+                })()}
+
+                {/* Supplier cards */}
+                <div className="space-y-3">
+                  {supplierModalList.map((s, i) => (
+                    <div key={i} className="border border-slate-200/70 dark:border-slate-800 rounded-2xl p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-extrabold text-blue-600 dark:text-blue-400 flex items-center gap-1.5 min-w-0">
+                          <span className="w-5 h-5 rounded-lg bg-blue-500/10 flex items-center justify-center text-[10px] shrink-0">{i + 1}</span>
+                          <span className="truncate">{s.supplierName || `Supplier ${i + 1}`}</span>
+                        </span>
+                        {s.uploadPoCopy && s.uploadPoCopy.startsWith('http') && (
+                          <a
+                            href={s.uploadPoCopy}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all cursor-pointer shrink-0"
+                          >
+                            <FileText className="w-3 h-3" /> View PO
+                          </a>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-0.5">
+                          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Purchase Qty</span>
+                          <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{s.purchaseQuantity || '—'}</p>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Purchase Rate</span>
+                          <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{s.purchaseRate || '—'}</p>
+                        </div>
+                        <div className="space-y-0.5 col-span-2">
+                          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Payment Terms &amp; Conditions</span>
+                          <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{s.paymentTerms || '—'}</p>
+                        </div>
+                        <div className="space-y-0.5 col-span-2">
+                          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Shortage Condition</span>
+                          <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{s.shortageCondition || '—'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setSupplierModalEntry(null)}
+                className="px-5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </motion.div>
         </div>
       )}

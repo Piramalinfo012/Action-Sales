@@ -120,7 +120,7 @@ export default function SettingsView({
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="space-y-8">
       {/* Title */}
       <div className="space-y-1">
         <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">

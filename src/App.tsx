@@ -17,21 +17,27 @@ import {
   LogOut, 
   BellRing,
   Sun,
-  Moon
+  Moon,
+  Activity,
+  ChevronDown,
+  ChevronRight,
+  Truck
 } from 'lucide-react';
-import { User, ActionEntry, SidebarTab } from './types';
-import { 
-  getActionsFromSheet, 
-  insertActionToSheet, 
-  updateActionInSheet, 
+import { User, ActionEntry, Supplier, SidebarTab } from './types';
+import {
+  getActionsFromSheet,
+  insertActionToSheet,
+  updateActionInSheet,
   updateL1ConfirmationInSheet,
   deleteActionFromSheet,
-  getUsersFromSheet
+  getUsersFromSheet,
+  syncSuppliersToAllocation
 } from './api';
 import Sidebar from './components/Sidebar';
 import DashboardView from './components/DashboardView';
 import NewActionView from './components/NewActionView';
-import PendingView from './components/PendingView';
+import DispatchPlanningView from './components/DispatchPlanningView';
+import DispatchStatusView from './components/DispatchStatusView';
 import HistoryView from './components/HistoryView';
 import ReportsView from './components/ReportsView';
 import SettingsView from './components/SettingsView';
@@ -73,6 +79,7 @@ export default function App() {
   
   // Mobile drawer state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobileDispatchOpen, setIsMobileDispatchOpen] = useState(activeTab === 'pending' || activeTab === 'dispatch-status');
 
   // Toast notifications state
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -96,13 +103,31 @@ export default function App() {
     }
   }, [darkMode]);
 
+  // Remove duplicate entries so counts never appear doubled. IDs (e.g. IND/1)
+  // are unique, so we collapse by ID; rows without an ID fall back to their
+  // content so distinct blank-ID rows are still kept separate.
+  const dedupeActions = (list: ActionEntry[]): ActionEntry[] => {
+    const seen = new Set<string>();
+    return list.filter((a) => {
+      const id = (a.id ?? '').trim();
+      // Skip blank local-* offline entries that have no real data
+      if (id.startsWith('local-') && !a.companyName?.trim() && !a.productName?.trim()) return false;
+      const key = id
+        ? `id:${id.toLowerCase()}`
+        : `row:${a.timestamp ?? ''}|${a.companyName ?? ''}|${a.productName ?? ''}|${a.quntity ?? ''}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+
   // Load action logs from Google Sheet or Offline fallback
   const loadActions = async (showNotification = false) => {
     setIsRefreshing(true);
     try {
       const res = await getActionsFromSheet();
       if (res.success && res.data) {
-        setActions(res.data);
+        setActions(dedupeActions(res.data));
         setIsOffline(false);
         if (showNotification) {
           addToast('success', 'Database Synchronized', 'Fetched latest transactions from Google Sheet!');
@@ -112,7 +137,7 @@ export default function App() {
         setIsOffline(true);
         const stored = localStorage.getItem('offlineActions');
         if (stored) {
-          setActions(JSON.parse(stored));
+          setActions(dedupeActions(JSON.parse(stored)));
         }
         if (showNotification) {
           addToast('info', 'Offline Cache', 'Loaded local sales auctions offline (Sheet "Data" not ready yet).');
@@ -122,7 +147,7 @@ export default function App() {
       setIsOffline(true);
       const stored = localStorage.getItem('offlineActions');
       if (stored) {
-        setActions(JSON.parse(stored));
+        setActions(dedupeActions(JSON.parse(stored)));
       }
       addToast('error', 'Sync Timed Out', 'Operating in Offline Mode due to slow sheets connectivity.');
     } finally {
@@ -136,6 +161,38 @@ export default function App() {
       loadActions();
     }
   }, [user]);
+
+  // Keep the list in sync with the sheet: re-fetch when the tab regains focus
+  // and poll periodically, so edits made directly in Google Sheets show up here
+  // without needing a manual refresh.
+  useEffect(() => {
+    if (!user) return;
+
+    const refresh = () => {
+      if (document.visibilityState === 'visible') {
+        loadActions();
+      }
+    };
+
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    const intervalId = window.setInterval(refresh, 30000); // every 30s
+
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+      window.clearInterval(intervalId);
+    };
+  }, [user]);
+
+  // Re-fetch every time the user switches views so any edits made directly in the
+  // sheet are reflected immediately when navigating (not just on the 30s poll).
+  useEffect(() => {
+    if (user) {
+      loadActions();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   // --- CRUD API handlers ---
   const handleAddAction = async (newEntry: ActionEntry): Promise<boolean> => {
@@ -152,10 +209,12 @@ export default function App() {
       // Remote insert
       const res = await insertActionToSheet(newEntry);
       if (res.success) {
-        // Reload list from sheet to ensure perfect row index sync!
-        await loadActions();
+        // Show the new row instantly, then re-sync row indexes from the sheet in
+        // the background so the modal closes without waiting for a second fetch.
+        setActions((prev: ActionEntry[]) => dedupeActions([newEntry, ...prev]));
         success = true;
         addToast('success', 'Database Updated', 'Sales action saved securely to Google Sheets!');
+        loadActions(); // background refresh (not awaited)
       } else {
         addToast('error', 'Remote Sync Failed', res.error || 'Failed to insert to Google Sheet.');
       }
@@ -201,7 +260,8 @@ export default function App() {
     purchaseRate: string = '',
     uploadPoCopy: string = '',
     paymentTerms: string = '',
-    shortageCondition: string = ''
+    shortageCondition: string = '',
+    suppliers: Supplier[] = []
   ): Promise<boolean> => {
     let success = false;
     const updatedEntry: ActionEntry = {
@@ -246,6 +306,11 @@ export default function App() {
         shortageCondition
       );
       if (res.success) {
+        // Mirror each supplier as its own row in the 'Purchase Allocation' sheet.
+        const allocRes = await syncSuppliersToAllocation(entry, willPurchase, suppliers);
+        if (!allocRes.success) {
+          addToast('info', 'Allocation Sheet', allocRes.error || 'Saved L1, but could not update the Purchase Allocation sheet.');
+        }
         await loadActions();
         success = true;
         addToast('success', 'L1 Confirmed', 'Successfully updated L1 Confirmation in Google Sheet database!');
@@ -369,13 +434,17 @@ export default function App() {
           return <div className="p-8 text-center text-slate-500 font-semibold">Access Denied. Managerial clearance required.</div>;
         }
         return (
-          <PendingView 
-            actions={actions} 
-            user={user} 
-            onUpdateAction={handleUpdateAction} 
-            onDeleteAction={handleDeleteAction}
-            isOffline={isOffline}
-            onSyncAction={handleSyncDraft}
+          <DispatchPlanningView
+            onAddToast={(type, title, desc) => addToast(type, title, desc)}
+          />
+        );
+      case 'dispatch-status':
+        if (user.role === 'Sales') {
+          return <div className="p-8 text-center text-slate-500 font-semibold">Access Denied. Managerial clearance required.</div>;
+        }
+        return (
+          <DispatchStatusView
+            onAddToast={(type, title, desc) => addToast(type, title, desc)}
           />
         );
       case 'history':
@@ -420,7 +489,7 @@ export default function App() {
   const menuItems = [
     { id: 'dashboard' as SidebarTab, label: 'Dashboard', icon: LayoutDashboard, roles: ['Admin', 'Sales', 'Manager'] },
     { id: 'new-action' as SidebarTab, label: 'New Action', icon: PlusCircle, roles: ['Admin', 'Sales'] },
-    { id: 'pending' as SidebarTab, label: 'Pending', icon: Clock, roles: ['Admin', 'Manager'] },
+    { id: 'pending' as SidebarTab, label: 'Dispatch', icon: Clock, roles: ['Admin', 'Manager'] },
     { id: 'history' as SidebarTab, label: 'History', icon: History, roles: ['Admin', 'Sales', 'Manager'] },
     { id: 'reports' as SidebarTab, label: 'Reports', icon: BarChart3, roles: ['Admin', 'Manager'] },
     { id: 'drive-folder' as SidebarTab, label: 'Shared Drive', icon: FolderOpen, roles: ['Admin', 'Sales', 'Manager'] },
@@ -536,6 +605,61 @@ export default function App() {
 
                 <nav className="space-y-2">
                   {allowedMobileItems.map((item) => {
+                    if (item.id === 'pending') {
+                      const isDispatchActive = activeTab === 'pending' || activeTab === 'dispatch-status';
+                      return (
+                        <div key="dispatch-group" className="space-y-1">
+                          <button
+                            onClick={() => setIsMobileDispatchOpen(!isMobileDispatchOpen)}
+                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                              isDispatchActive && !isMobileDispatchOpen
+                                ? 'bg-blue-600/10 text-blue-400'
+                                : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3.5">
+                              <Truck className="w-5 h-5" />
+                              <span>{item.label}</span>
+                            </div>
+                            {isMobileDispatchOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                          </button>
+                          
+                          {isMobileDispatchOpen && (
+                            <div className="pl-12 pr-2 space-y-1 mt-1">
+                              <button
+                                onClick={() => {
+                                  setActiveTab('pending');
+                                  setIsMobileMenuOpen(false);
+                                }}
+                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                                  activeTab === 'pending'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
+                                }`}
+                              >
+                                <Truck className="w-4 h-4" />
+                                <span>Dispatch Planning</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setActiveTab('dispatch-status');
+                                  setIsMobileMenuOpen(false);
+                                }}
+                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                                  activeTab === 'dispatch-status'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
+                                }`}
+                              >
+                                <Activity className="w-4 h-4" />
+                                <span>Dispatch Status</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
                     const Icon = item.icon;
                     const isActive = activeTab === item.id;
                     return (

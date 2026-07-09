@@ -125,51 +125,98 @@ export default function DashboardView({
     }
   ];
 
+  // Time-of-day greeting for a more personal welcome
+  const greetHour = new Date().getHours();
+  const greeting = greetHour < 12 ? 'Good morning' : greetHour < 17 ? 'Good afternoon' : 'Good evening';
+
   return (
     <div className="space-y-8">
       {/* Welcome Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-blue-700 to-indigo-800 rounded-2xl p-5 md:p-6 text-white shadow-xl shadow-blue-900/10 relative overflow-hidden">
-        <div className="absolute right-0 top-0 bottom-0 opacity-10 pointer-events-none flex items-center justify-center translate-x-12 scale-150">
-          <TrendingUp className="w-96 h-96" />
+      <motion.div
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-br from-blue-600 via-indigo-700 to-violet-800 rounded-3xl p-6 md:p-8 text-white shadow-2xl shadow-indigo-900/30 relative overflow-hidden"
+      >
+        {/* Animated ambient orbs */}
+        <motion.div
+          aria-hidden
+          className="absolute -right-16 -top-20 w-72 h-72 rounded-full bg-white/10 blur-3xl pointer-events-none"
+          animate={{ scale: [1, 1.25, 1], opacity: [0.5, 0.85, 0.5] }}
+          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+        />
+        <motion.div
+          aria-hidden
+          className="absolute -left-10 -bottom-24 w-64 h-64 rounded-full bg-violet-400/20 blur-3xl pointer-events-none"
+          animate={{ scale: [1, 1.15, 1], opacity: [0.4, 0.7, 0.4] }}
+          transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+        />
+        {/* Decorative faint grid + icon */}
+        <div
+          aria-hidden
+          className="absolute inset-0 opacity-[0.07] pointer-events-none"
+          style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.6) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.6) 1px,transparent 1px)', backgroundSize: '28px 28px' }}
+        />
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-[0.08] pointer-events-none scale-150">
+          <TrendingUp className="w-72 h-72" />
         </div>
-        <div className="relative z-10 space-y-1">
-          <h2 className="text-xl md:text-2xl font-bold tracking-tight">
-            Good day, {user?.name || 'User'}!
+
+        <div className="relative z-10 space-y-2">
+          <motion.span
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.15 }}
+            className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest bg-white/15 border border-white/20 backdrop-blur-md px-2.5 py-1 rounded-full"
+          >
+            <Calendar className="w-3 h-3" />
+            {greeting}
+          </motion.span>
+          <h2 className="text-2xl md:text-3xl font-black tracking-tight">
+            {greeting}, {user?.name || 'User'}! 👋
           </h2>
-          <p className="text-blue-100 text-xs md:text-sm max-w-xl font-medium leading-relaxed">
-            Welcome to your **FMS Auction Registry**. Create transactions, view logs, and synchronize data directly with Google Sheets.
+          <p className="text-blue-100/90 text-xs md:text-sm max-w-xl font-medium leading-relaxed">
+            Welcome to your <strong className="font-bold text-white">FMS Auction Registry</strong>. Create transactions, view logs, and synchronize data directly with Google Sheets.
           </p>
         </div>
-        
+
         <div className="flex flex-wrap gap-2.5 relative z-10">
           {user?.role !== 'Manager' && (
-            <button
+            <motion.button
               onClick={() => onNavigate('new-action')}
-              className="bg-white text-blue-800 hover:bg-blue-50 transition-all duration-300 px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 shadow-lg shadow-black/10 cursor-pointer"
+              whileHover={{ scale: 1.04, y: -2 }}
+              whileTap={{ scale: 0.97 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 18 }}
+              className="bg-white text-indigo-800 hover:bg-blue-50 px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-black/20 cursor-pointer"
             >
               <PlusCircle className="w-4.5 h-4.5" />
               <span>Create Auction</span>
-            </button>
+            </motion.button>
           )}
 
-          <button 
+          <motion.button
             onClick={() => onNavigate('drive-folder')}
-            className="bg-white/15 hover:bg-white/25 text-white border border-white/10 backdrop-blur-md transition-all duration-300 px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-lg shadow-black/5"
+            whileHover={{ scale: 1.04, y: -2 }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 18 }}
+            className="bg-white/15 hover:bg-white/25 text-white border border-white/20 backdrop-blur-md px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-lg shadow-black/5"
           >
             <FolderOpen className="w-4.5 h-4.5" />
             <span>Shared Drive</span>
-          </button>
-          
-          <button 
+          </motion.button>
+
+          <motion.button
             onClick={onRefresh}
             disabled={isRefreshing}
-            className="bg-blue-600/30 backdrop-blur-md text-white border border-white/20 hover:bg-blue-600/50 transition-all duration-300 px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            whileHover={{ scale: isRefreshing ? 1 : 1.04, y: isRefreshing ? 0 : -2 }}
+            whileTap={{ scale: isRefreshing ? 1 : 0.97 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 18 }}
+            className="bg-indigo-600/40 backdrop-blur-md text-white border border-white/20 hover:bg-indigo-600/60 px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Database className={`w-4.5 h-4.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
-          </button>
+          </motion.button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Database Connection / Offline Assistant */}
       {isOffline && (
@@ -221,89 +268,117 @@ export default function DashboardView({
       )}
 
       {/* Grid Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {stats.map((stat, index) => {
+      <motion.div
+        variants={{ show: { transition: { staggerChildren: 0.06, delayChildren: 0.1 } } }}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+      >
+        {stats.map((stat) => {
           const Icon = stat.icon;
           const colorStyles: any = {
-            blue: 'text-blue-600 dark:text-blue-400 bg-blue-500/8 border-blue-500/10',
-            amber: 'text-amber-600 dark:text-amber-400 bg-amber-500/8 border-amber-500/10',
-            emerald: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/8 border-emerald-500/10',
-            indigo: 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/8 border-indigo-500/10',
-            violet: 'text-violet-600 dark:text-violet-400 bg-violet-500/8 border-violet-500/10',
-            sky: 'text-sky-600 dark:text-sky-400 bg-sky-500/8 border-sky-500/10'
+            blue: { icon: 'from-blue-500 to-blue-600 shadow-blue-500/30', glow: 'bg-blue-500/10', accent: 'bg-blue-500' },
+            amber: { icon: 'from-amber-500 to-orange-600 shadow-amber-500/30', glow: 'bg-amber-500/10', accent: 'bg-amber-500' },
+            emerald: { icon: 'from-emerald-500 to-teal-600 shadow-emerald-500/30', glow: 'bg-emerald-500/10', accent: 'bg-emerald-500' },
+            indigo: { icon: 'from-indigo-500 to-indigo-600 shadow-indigo-500/30', glow: 'bg-indigo-500/10', accent: 'bg-indigo-500' },
+            violet: { icon: 'from-violet-500 to-purple-600 shadow-violet-500/30', glow: 'bg-violet-500/10', accent: 'bg-violet-500' },
+            sky: { icon: 'from-sky-500 to-cyan-600 shadow-sky-500/30', glow: 'bg-sky-500/10', accent: 'bg-sky-500' }
           };
-          
+          const c = colorStyles[stat.color];
+
           return (
             <motion.div
               key={stat.label}
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.04 }}
-              className="glass-card rounded-2xl p-4.5 sm:p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md dark:hover:shadow-black/30 border border-slate-100/80 dark:border-slate-800/80 flex flex-col justify-between"
+              variants={{ hidden: { opacity: 0, y: 18, scale: 0.97 }, show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] } } }}
+              whileHover={{ y: -5 }}
+              className="group glass-card rounded-2xl p-5 relative overflow-hidden border border-slate-100/80 dark:border-slate-800/80 flex flex-col justify-between transition-shadow duration-300 hover:shadow-xl dark:hover:shadow-black/40"
             >
-              <div className="flex items-center justify-between gap-3">
+              {/* Left accent bar */}
+              <span className={`absolute left-0 top-0 bottom-0 w-1 ${c.accent} opacity-70 group-hover:opacity-100 transition-opacity`} />
+              {/* Corner glow on hover */}
+              <div className={`absolute -right-8 -top-8 w-28 h-28 rounded-full ${c.glow} blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`} />
+
+              <div className="flex items-center justify-between gap-3 relative">
                 <span className="text-slate-400 dark:text-slate-500 font-bold text-[10px] uppercase tracking-wider">
                   {stat.label}
                 </span>
-                <div className={`w-8.5 h-8.5 rounded-xl flex items-center justify-center border shrink-0 ${colorStyles[stat.color]}`}>
-                  <Icon className="w-4 h-4" />
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br text-white shadow-lg shrink-0 group-hover:scale-110 group-hover:-rotate-6 transition-transform duration-300 ${c.icon}`}>
+                  <Icon className="w-5 h-5" />
                 </div>
               </div>
-              <div className="mt-3.5">
-                <span className={`font-bold text-slate-900 dark:text-white tracking-tight leading-none block truncate ${
-                  stat.label === 'Top Location' ? 'text-base md:text-lg' : 'text-xl md:text-2xl font-sans'
+              <div className="mt-4 relative">
+                <span className={`font-black text-slate-900 dark:text-white tracking-tight leading-none block truncate ${
+                  stat.label === 'Top Location' ? 'text-base md:text-lg' : 'text-2xl md:text-3xl font-sans'
                 }`} title={String(stat.value)}>
                   {stat.value}
                 </span>
-                <p className="text-slate-400 dark:text-slate-500 text-[10.5px] mt-1 font-medium leading-normal truncate">
+                <p className="text-slate-400 dark:text-slate-500 text-[10.5px] mt-1.5 font-medium leading-normal truncate">
                   {stat.description}
                 </p>
               </div>
             </motion.div>
           );
         })}
-      </div>
+      </motion.div>
 
       {/* Grid Bottom: Recent activities & Guide */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent sales entries list */}
-        <div className="lg:col-span-2 glass-card rounded-3xl p-6 flex flex-col justify-between">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25, duration: 0.5 }}
+          className="lg:col-span-2 glass-card rounded-3xl p-6 flex flex-col justify-between"
+        >
           <div>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-slate-900 dark:text-white font-bold tracking-tight text-lg">
+              <h3 className="text-slate-900 dark:text-white font-bold tracking-tight text-lg flex items-center gap-2">
+                <span className="w-1.5 h-6 rounded-full bg-gradient-to-b from-blue-500 to-indigo-600" />
                 Recent Transactions Logged
               </h3>
-              <button 
+              <button
                 onClick={() => onNavigate('history')}
-                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 text-xs font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer"
+                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 text-xs font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer group"
               >
                 <span>View All</span>
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </button>
             </div>
 
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            <div className="space-y-1">
               {recentEntries.length === 0 ? (
-                <div className="py-8 text-center text-slate-400 font-medium text-sm">
-                  No auctions found. Click "Create Auction" to log your first transaction.
+                <div className="py-12 text-center flex flex-col items-center gap-3">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center text-slate-400">
+                    <TrendingUp className="w-7 h-7" />
+                  </div>
+                  <p className="text-slate-400 font-medium text-sm max-w-xs">
+                    No auctions found. Click "Create Auction" to log your first transaction.
+                  </p>
                 </div>
               ) : (
-                recentEntries.map((action) => (
-                  <div key={action.id + '-' + action.rowIndex} className="py-4 flex items-center justify-between gap-4">
+                recentEntries.map((action, i) => (
+                  <motion.div
+                    key={action.id + '-' + action.rowIndex}
+                    initial={{ opacity: 0, x: -12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3 + i * 0.06 }}
+                    className="py-3 px-3 -mx-3 rounded-2xl flex items-center justify-between gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group"
+                  >
                     <div className="flex items-center gap-3.5 overflow-hidden">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-blue-500/10 text-blue-500 shrink-0">
+                      <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-gradient-to-br from-blue-500/15 to-indigo-500/15 text-blue-500 dark:text-blue-400 border border-blue-500/10 shrink-0 group-hover:scale-105 transition-transform">
                         <TrendingUp className="w-5 h-5" />
                       </div>
                       <div className="overflow-hidden">
                         <p className="font-semibold text-slate-900 dark:text-white text-sm truncate">
                           {action.companyName}
                         </p>
-                        <p className="text-slate-400 dark:text-slate-500 text-xs truncate">
+                        <p className="text-slate-400 dark:text-slate-500 text-xs truncate flex items-center gap-1">
+                          <MapPin className="w-3 h-3 shrink-0" />
                           {action.productName} • {action.location}
                         </p>
                       </div>
                     </div>
-                    
+
                     <div className="text-right shrink-0">
                       <p className="font-bold text-slate-900 dark:text-white text-sm">
                         {(action.quntity || 0).toLocaleString()} {action.unit}
@@ -312,57 +387,66 @@ export default function DashboardView({
                         {action.timestamp}
                       </p>
                     </div>
-                  </div>
+                  </motion.div>
                 ))
               )}
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Info panel / User role permissions guide */}
-        <div className="glass-card bg-slate-900/60 dark:bg-slate-950/60 rounded-3xl p-6 text-white flex flex-col justify-between">
-          <div>
-            <h3 className="font-bold tracking-tight text-lg text-white mb-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.32, duration: 0.5 }}
+          className="rounded-3xl p-6 text-white flex flex-col justify-between relative overflow-hidden bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 shadow-xl"
+        >
+          {/* Ambient accent glow */}
+          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-blue-600/20 blur-3xl pointer-events-none" />
+          <div className="relative">
+            <h3 className="font-bold tracking-tight text-lg text-white mb-4 flex items-center gap-2">
+              <span className="w-1.5 h-6 rounded-full bg-gradient-to-b from-blue-400 to-violet-500" />
               Your Profile & Access
             </h3>
-            <div className="bg-slate-950/40 p-4 rounded-2xl border border-slate-800 flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-sm">
+            <div className="bg-white/5 backdrop-blur-sm p-4 rounded-2xl border border-white/10 flex items-center gap-3 mb-6">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-black text-base shadow-lg shadow-blue-500/30 shrink-0">
                 {user?.name ? user.name[0].toUpperCase() : 'U'}
               </div>
               <div className="overflow-hidden">
-                <p className="font-semibold text-sm text-white truncate">{user?.name}</p>
-                <p className="text-xs text-slate-400 truncate">@{user?.username} ({user?.role})</p>
+                <p className="font-bold text-sm text-white truncate">{user?.name || 'User'}</p>
+                <p className="text-xs text-slate-400 truncate">@{user?.username} · <span className="text-blue-400 font-semibold">{user?.role}</span></p>
               </div>
             </div>
 
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
               Role Capabilities
             </h4>
-            
-            <ul className="space-y-3 text-sm text-slate-300">
-              <li className="flex items-start gap-2.5">
-                <ChevronRight className="w-4 h-5 text-blue-400 shrink-0 mt-0.5" />
-                <span><strong>View Dashboard</strong> — Overall real-time analytical summary</span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <ChevronRight className="w-4 h-5 text-blue-400 shrink-0 mt-0.5" />
-                <span><strong>Create Auction</strong> — Log new transactions (Admin & Sales only)</span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <ChevronRight className="w-4 h-5 text-blue-400 shrink-0 mt-0.5" />
-                <span><strong>Modify Entries</strong> — Edit or delete existing records (Admin & Manager only)</span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <ChevronRight className="w-4 h-5 text-blue-400 shrink-0 mt-0.5" />
-                <span><strong>Reports View</strong> — Access interactive analytics charts (Admin & Manager only)</span>
-              </li>
+
+            <ul className="space-y-2.5 text-sm text-slate-300">
+              {[
+                ['View Dashboard', 'Overall real-time analytical summary'],
+                ['Create Auction', 'Log new transactions (Admin & Sales only)'],
+                ['Modify Entries', 'Edit or delete existing records (Admin & Manager only)'],
+                ['Reports View', 'Access interactive analytics charts (Admin & Manager only)']
+              ].map(([title, desc], i) => (
+                <motion.li
+                  key={title}
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4 + i * 0.07 }}
+                  className="flex items-start gap-2.5 p-2 rounded-xl hover:bg-white/5 transition-colors"
+                >
+                  <ChevronRight className="w-4 h-5 text-blue-400 shrink-0 mt-0.5" />
+                  <span><strong className="text-white">{title}</strong> — {desc}</span>
+                </motion.li>
+              ))}
             </ul>
           </div>
-          
-          <div className="border-t border-slate-800 pt-4 mt-6 text-[11px] text-slate-500 font-medium">
+
+          <div className="border-t border-slate-800 pt-4 mt-6 text-[11px] text-slate-500 font-medium relative">
             Auction FMS System v1.2.0 • Connected securely to Google Sheet FMS.
           </div>
-        </div>
+        </motion.div>
       </div>
     </div>
   );

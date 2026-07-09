@@ -30,7 +30,25 @@ export interface ActionEntry {
   rawRowValues?: any[]; // Keep full row representation to avoid losing other columns on update
 }
 
-export type SidebarTab = 'dashboard' | 'new-action' | 'pending' | 'history' | 'reports' | 'drive-folder' | 'settings';
+// A single supplier allocation within a Purchase Allocation. Multiple suppliers
+// can share one order (e.g. 300 split as 100 + 100 + 100). The six data fields
+// are serialized into the existing FMS sheet columns (newline-joined per column),
+// so no backend/sheet schema change is required. The remaining fields are UI-only.
+export interface Supplier {
+  supplierName: string;
+  purchaseQuantity: string;
+  purchaseRate: string;
+  uploadPoCopy: string;
+  paymentTerms: string;
+  shortageCondition: string;
+  poMode?: 'upload' | 'link'; // UI-only: which PO input is active
+  poFileName?: string;        // UI-only: uploaded file name for display
+  poFileSize?: string;        // UI-only: uploaded file size for display
+  isUploading?: boolean;      // UI-only: upload in progress
+  uploadProgress?: number;    // UI-only: upload progress %
+}
+
+export type SidebarTab = 'dashboard' | 'new-action' | 'pending' | 'dispatch-status' | 'history' | 'reports' | 'drive-folder' | 'settings';
 
 export interface ToastMessage {
   id: string;

@@ -1,4 +1,4 @@
-import { User, ActionEntry } from './types';
+import { User, ActionEntry, Supplier } from './types';
 
 export function formatToDDMMYYYY(dateInput: any): string {
   if (!dateInput) return '';
@@ -21,12 +21,10 @@ export function formatToDDMMYYYY(dateInput: any): string {
   }
 
   try {
-    // If it has 'T', e.g. "2026-08-06T18:30:00.000Z", extract YYYY-MM-DD first for timezone-safe parsing
-    const matchHyphen = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (matchHyphen) {
-      return `${matchHyphen[3]}/${matchHyphen[2]}/${matchHyphen[1]}`;
-    }
-
+    // For ISO datetime strings (e.g. "2026-08-06T18:30:00.000Z"), Apps Script stores
+    // a sheet date as local-midnight, which serializes to the PREVIOUS day in UTC.
+    // So we must read the LOCAL calendar date, not the raw UTC date part — otherwise
+    // the day comes out one behind what the sheet shows.
     const parsedDate = new Date(str);
     if (!isNaN(parsedDate.getTime())) {
       const day = String(parsedDate.getDate()).padStart(2, '0');
@@ -46,7 +44,7 @@ export const API_URL = 'https://script.google.com/macros/s/AKfycbyFc-5tbzm5yGpl1
 // Fetch users from Google Sheet 'Login'
 export async function getUsersFromSheet(): Promise<{ success: boolean; data?: any[]; error?: string }> {
   try {
-    const response = await fetch(`${API_URL}?sheet=Login`);
+    const response = await fetch(`${API_URL}?sheet=Login&t=${Date.now()}`, { cache: 'no-store' });
     const result = await response.json();
     if (result.success && result.data) {
       // Map 2D array to objects
@@ -92,7 +90,8 @@ export async function updateUserPasswordInSheet(
 // Fetch Action sales data from Google Sheet 'FMS'
 export async function getActionsFromSheet(): Promise<{ success: boolean; data?: ActionEntry[]; isOffline?: boolean; error?: string }> {
   try {
-    const response = await fetch(`${API_URL}?sheet=FMS`);
+    // Cache-bust so edits made directly in the sheet always show up on refresh.
+    const response = await fetch(`${API_URL}?sheet=FMS&t=${Date.now()}`, { cache: 'no-store' });
     const result = await response.json();
     
     if (result.success && result.data) {
@@ -125,7 +124,10 @@ export async function getActionsFromSheet(): Promise<{ success: boolean; data?: 
             if (key.includes('timetamp') || key.includes('timestamp')) mappedKey = 'timestamp';
             else if (key.includes('id')) mappedKey = 'id';
             else if (key.includes('companyname') || key.includes('company')) mappedKey = 'companyName';
-            else if (key.includes('quntity') || key.includes('quantity')) mappedKey = 'quntity';
+            // Match the order Quntity column EXACTLY so sibling columns like
+            // "Total Quantity" / "Pending Quantity" / "Purchase Quantity" don't
+            // hijack it (which was making the displayed quantity read as 0).
+            else if (key === 'quntity' || key === 'quantity') mappedKey = 'quntity';
             else if (key.includes('unit')) mappedKey = 'unit';
             else if (key.includes('productname') || key.includes('product')) mappedKey = 'productName';
             else if (key.includes('location')) mappedKey = 'location';
@@ -146,15 +148,34 @@ export async function getActionsFromSheet(): Promise<{ success: boolean; data?: 
             obj[mappedKey] = row[hIdx];
           });
           
+          // FMS core columns are always in fixed positions A-H, so read them by
+          // index. This guarantees the quantity comes from column D (index 3) and
+          // can never be hijacked by the newer "...Quantity" status columns.
+          const colA = row[0];  // A  Timetamp
+          const colB = row[1];  // B  ID
+          const colC = row[2];  // C  Company Name
+          const colD = row[3];  // D  Quntity  <-- quantity source
+          const colE = row[4];  // E  Unit
+          const colF = row[5];  // F  Product Name
+          const colG = row[6];  // G  Location
+          const colH = row[7];  // H  Remark
+
+          // Prefer column D; fall back to the header-matched value, then the
+          // 'Total Quantity' column, so a blank D never silently shows 0.
+          const qtySource = (colD !== '' && colD != null) ? colD
+            : (obj.quntity !== '' && obj.quntity != null) ? obj.quntity
+            : obj.totalquantity;
+          const parsedQty = parseFloat(String(qtySource).replace(/,/g, ''));
+
           return {
-            id: obj.id || `local-${index}`,
-            timestamp: formatToDDMMYYYY(obj.timestamp),
-            companyName: obj.companyName || '',
-            quntity: parseFloat(obj.quntity) || 0,
-            unit: obj.unit || '',
-            productName: obj.productName || '',
-            location: obj.location || '',
-            remark: obj.remark || '',
+            id: (colB ?? obj.id) || `local-${index}`,
+            timestamp: formatToDDMMYYYY(colA ?? obj.timestamp),
+            companyName: (colC ?? obj.companyName) || '',
+            quntity: isNaN(parsedQty) ? 0 : parsedQty,
+            unit: (colE ?? obj.unit) || '',
+            productName: (colF ?? obj.productName) || '',
+            location: (colG ?? obj.location) || '',
+            remark: (colH ?? obj.remark) || '',
             planned1: formatToDDMMYYYY(obj.planned1),
             actual1: formatToDDMMYYYY(obj.actual1),
             timeDelay1: obj.timeDelay1 || '',
@@ -241,7 +262,33 @@ export async function updateActionInSheet(
   }
 }
 
-// Update Action entry - L1 Confirmation columns and Purchase Allocation columns
+// Write a single cell via the backend 'updateCell' action. Uses a form-encoded
+// body so long values / special characters are safe and no CORS preflight fires.
+async function updateCellValue(
+  sheetName: string,
+  rowIndex: number,
+  columnIndex: number,
+  value: any
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const body = new URLSearchParams();
+    body.append('sheetName', sheetName);
+    body.append('action', 'updateCell');
+    body.append('rowIndex', String(rowIndex));
+    body.append('columnIndex', String(columnIndex));
+    body.append('value', value === null || value === undefined ? '' : String(value));
+    const res = await fetch(API_URL, { method: 'POST', body });
+    return await res.json();
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error updating cell' };
+  }
+}
+
+// Update Action entry - L1 Confirmation columns and Purchase Allocation columns.
+// IMPORTANT: Planned1 (column 19 / index 18) is a sheet formula — it is READ ONLY
+// and never written here. We update only the specific L1 / allocation cells (via
+// per-cell writes) so the Planned1 formula and any other untouched columns stay
+// intact. The 'planned1' and 'entry' parameters are kept for signature stability.
 export async function updateL1ConfirmationInSheet(
   rowIndex: number,
   entry: ActionEntry,
@@ -259,45 +306,26 @@ export async function updateL1ConfirmationInSheet(
   shortageCondition: string = ''
 ): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
-    // Preserve other columns using rawRowValues if available, or create 32-length array
-    let rowData = entry.rawRowValues ? [...entry.rawRowValues] : new Array(32).fill('');
-    while (rowData.length < 32) {
-      rowData.push('');
+    // FMS stores ONLY the L1 basics. The per-supplier purchase details are stored
+    // in the 'Purchase Allocation' sheet (see syncSuppliersToAllocation), so we do
+    // NOT write columns 27-32 here. Planned1 (col 19) is a formula and never written.
+    // Writes run SEQUENTIALLY — firing many concurrent POSTs at Apps Script makes it
+    // return an HTML error page ("Unexpected token '<'"), which broke the save.
+    const writes: Array<[number, any]> = [
+      [20, actual1],       // Actual1
+      [21, timeDelay1],    // Time Delay1
+      [22, areWeL1],       // Are We L1?
+      [25, timeDelay2],    // Time Delay 2
+      [26, willPurchase]   // Will We Purchase Material from Another Party?
+    ];
+
+    for (const [col, val] of writes) {
+      const r = await updateCellValue('FMS', rowIndex, col, val);
+      if (!r.success) {
+        return { success: false, error: r.error || 'Failed to update L1 Confirmation' };
+      }
     }
-
-    // Set first 8 columns to match current entry values
-    rowData[0] = entry.timestamp;
-    rowData[1] = entry.id;
-    rowData[2] = entry.companyName;
-    rowData[3] = entry.quntity;
-    rowData[4] = entry.unit;
-    rowData[5] = entry.productName;
-    rowData[6] = entry.location;
-    rowData[7] = entry.remark;
-
-    // Set L1 Confirmation values in columns S (index 18), T (index 19), U (index 20), V (index 21)
-    rowData[18] = planned1;
-    rowData[19] = actual1;
-    rowData[20] = timeDelay1;
-    rowData[21] = areWeL1;
-
-    // Set Purchase Allocation values starting from index 24 (Column Y) to 31 (Column AF)
-    rowData[24] = timeDelay2;
-    rowData[25] = willPurchase;
-    rowData[26] = supplierName;
-    rowData[27] = purchaseQuantity;
-    rowData[28] = purchaseRate;
-    rowData[29] = uploadPoCopy;
-    rowData[30] = paymentTerms;
-    rowData[31] = shortageCondition;
-
-    const query = `?sheetName=FMS&action=update&rowIndex=${rowIndex}&rowData=${encodeURIComponent(JSON.stringify(rowData))}`;
-    const response = await fetch(`${API_URL}${query}`, { method: 'POST' });
-    const result = await response.json();
-    if (result.success) {
-      return { success: true, message: result.message };
-    }
-    return { success: false, error: result.error || 'Failed to update L1 Confirmation' };
+    return { success: true, message: 'L1 Confirmation updated' };
   } catch (err: any) {
     return { success: false, error: err.message || 'Network error updating L1 Confirmation' };
   }
@@ -323,7 +351,7 @@ export async function deleteActionFromSheet(
 // Fetch Product Names from Google Sheet 'Master' Column B (B2:B)
 export async function getProductsFromMasterSheet(): Promise<{ success: boolean; data?: string[]; error?: string }> {
   try {
-    const response = await fetch(`${API_URL}?sheet=Master`);
+    const response = await fetch(`${API_URL}?sheet=Master&t=${Date.now()}`, { cache: 'no-store' });
     const result = await response.json();
     if (result.success && result.data) {
       const products: string[] = [];
@@ -345,6 +373,32 @@ export async function getProductsFromMasterSheet(): Promise<{ success: boolean; 
     return { success: false, error: result.error || 'Failed to read Master sheet' };
   } catch (err: any) {
     return { success: false, error: err.message || 'Network error fetching Master sheet' };
+  }
+}
+
+// Fetch Material Sources from Google Sheet 'Master' Column A (A2:A). Used as the
+// "Material To Be supplied From" dropdown options in Dispatch Planning.
+export async function getMaterialSourcesFromMaster(): Promise<{ success: boolean; data: string[]; error?: string }> {
+  try {
+    const response = await fetch(`${API_URL}?sheet=Master&t=${Date.now()}`, { cache: 'no-store' });
+    const result = await response.json();
+    if (result.success && Array.isArray(result.data)) {
+      const sources: string[] = [];
+      // Start from index 1 (row 2), Column A (index 0).
+      for (let i = 1; i < result.data.length; i++) {
+        const row = result.data[i];
+        if (Array.isArray(row) && row.length > 0) {
+          const val = row[0];
+          if (val !== undefined && val !== null && val.toString().trim() !== '') {
+            sources.push(val.toString().trim());
+          }
+        }
+      }
+      return { success: true, data: sources };
+    }
+    return { success: false, data: [], error: result.error || 'Failed to read Master sheet' };
+  } catch (err: any) {
+    return { success: false, data: [], error: err.message || 'Network error fetching Master sheet' };
   }
 }
 
@@ -397,4 +451,438 @@ export function getOfflineActions(): ActionEntry[] {
 
 export function saveOfflineActions(actions: ActionEntry[]) {
   localStorage.setItem('offline_actions', JSON.stringify(actions));
+}
+
+// ============== PURCHASE ALLOCATION SUB-SHEET ==============
+// Each supplier of an order is stored as its own row in the 'Purchase Allocation'
+// sheet (columns A-O). The L1 basics (Actual1 / Time Delay1 / Are We L1?) continue
+// to live in the FMS sheet — only the supplier/purchase details are mirrored here.
+export const PURCHASE_ALLOCATION_SHEET = 'Purchase Allocation';
+
+// Read the raw allocation rows for a parent entry ID. Returns the reconstructed
+// suppliers plus their sheet row indexes (needed to replace them on re-edit).
+async function fetchAllocationRows(entryId: string): Promise<{ suppliers: Supplier[]; rowIndexes: number[] }> {
+  const empty = { suppliers: [] as Supplier[], rowIndexes: [] as number[] };
+  try {
+    const response = await fetch(`${API_URL}?sheet=${encodeURIComponent(PURCHASE_ALLOCATION_SHEET)}&t=${Date.now()}`, { cache: 'no-store' });
+    const result = await response.json();
+    if (!result.success || !Array.isArray(result.data)) return empty;
+
+    const data: any[][] = result.data;
+
+    // Locate the header row (row 5 in the sheet, but scan to be robust).
+    let headerIdx = -1;
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      if (Array.isArray(row) && row.some(c =>
+        typeof c === 'string' &&
+        (c.toLowerCase().includes('supplier name') || c.toLowerCase().includes('allocation id'))
+      )) {
+        headerIdx = i;
+        break;
+      }
+    }
+    if (headerIdx === -1) return empty;
+
+    const headers = data[headerIdx].map((h: any) => String(h || '').trim().toLowerCase());
+    const findCol = (pred: (h: string) => boolean) => headers.findIndex(pred);
+    const cols = {
+      id: headers.indexOf('id'), // exact 'ID' column (not 'Allocation ID')
+      supplierName: findCol(h => h.includes('supplier name')),
+      purchaseQuantity: findCol(h => h.includes('purchase quantity')),
+      purchaseRate: findCol(h => h.includes('purchase rate')),
+      uploadPoCopy: findCol(h => h.includes('po copy') || h.includes('upload po')),
+      paymentTerms: findCol(h => h.includes('payment terms')),
+      shortageCondition: findCol(h => h.includes('shortage'))
+    };
+
+    const suppliers: Supplier[] = [];
+    const rowIndexes: number[] = [];
+    const target = entryId.trim().toLowerCase();
+
+    for (let i = headerIdx + 1; i < data.length; i++) {
+      const row = data[i];
+      if (!Array.isArray(row)) continue;
+      const rowId = cols.id >= 0 ? String(row[cols.id] ?? '').trim() : '';
+      if (!rowId || rowId.toLowerCase() !== target) continue;
+
+      rowIndexes.push(i + 1); // data[i] corresponds to sheet row (i + 1)
+      suppliers.push({
+        supplierName: cols.supplierName >= 0 ? String(row[cols.supplierName] ?? '') : '',
+        purchaseQuantity: cols.purchaseQuantity >= 0 ? String(row[cols.purchaseQuantity] ?? '') : '',
+        purchaseRate: cols.purchaseRate >= 0 ? String(row[cols.purchaseRate] ?? '') : '',
+        uploadPoCopy: cols.uploadPoCopy >= 0 ? String(row[cols.uploadPoCopy] ?? '') : '',
+        paymentTerms: cols.paymentTerms >= 0 ? String(row[cols.paymentTerms] ?? '') : '',
+        shortageCondition: cols.shortageCondition >= 0 ? String(row[cols.shortageCondition] ?? '') : '',
+        poMode: 'upload'
+      });
+    }
+
+    return { suppliers, rowIndexes };
+  } catch {
+    return empty;
+  }
+}
+
+// Read the suppliers stored for an entry (used when re-opening the L1 modal).
+export async function getSuppliersForEntry(entryId: string): Promise<Supplier[]> {
+  const { suppliers } = await fetchAllocationRows(entryId);
+  return suppliers;
+}
+
+// Replace all allocation rows for an entry with the provided suppliers.
+// Existing rows for the same ID are deleted first so re-editing never duplicates.
+export async function syncSuppliersToAllocation(
+  entry: ActionEntry,
+  willPurchase: string,
+  suppliers: Supplier[]
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // 1) Delete existing rows for this entry (descending so indexes stay valid).
+    const { rowIndexes } = await fetchAllocationRows(entry.id);
+    const descending = [...rowIndexes].sort((a, b) => b - a);
+    for (const r of descending) {
+      await fetch(`${API_URL}?sheetName=${encodeURIComponent(PURCHASE_ALLOCATION_SHEET)}&action=delete&rowIndex=${r}`, { method: 'POST' });
+    }
+
+    // 2) Insert one row per supplier (columns A-O). Column P (PL) is left untouched.
+    if (!suppliers || suppliers.length === 0) return { success: true };
+
+    const rowsData = suppliers.map((s, i) => [
+      entry.timestamp || '',            // A  Timetamp
+      `${entry.id}/A${i + 1}`,          // B  Allocation ID
+      entry.id || '',                   // C  ID
+      entry.companyName || '',          // D  Company Name
+      entry.quntity ?? '',              // E  Quntity
+      entry.productName || '',          // F  Product Name
+      entry.location || '',             // G  Location
+      entry.remark || '',               // H  Remark
+      willPurchase || '',               // I  Will We Purchase Material from Another Party?
+      s.supplierName || '',             // J  Supplier Name
+      s.purchaseQuantity || '',         // K  Purchase Quantity
+      s.purchaseRate || '',             // L  Purchase Rate
+      s.uploadPoCopy || '',             // M  Upload Po Copy
+      s.paymentTerms || '',             // N  Payment Terms and Condition
+      s.shortageCondition || ''         // O  Shortage Condition
+    ]);
+
+    const query = `?sheetName=${encodeURIComponent(PURCHASE_ALLOCATION_SHEET)}&action=batchInsert&rowsData=${encodeURIComponent(JSON.stringify(rowsData))}`;
+    const res = await fetch(`${API_URL}${query}`, { method: 'POST' });
+    const j = await res.json();
+    if (j.success) return { success: true };
+    return { success: false, error: j.error || 'Failed to write Purchase Allocation rows' };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error writing Purchase Allocation' };
+  }
+}
+
+// ============== DISPATCH PLANNING (Purchase Allocation columns R-X) ==============
+// Each Purchase Allocation row (one per supplier, created after L1 confirmation)
+// carries the dispatch-planning fields in columns R-X. Dispatch Planning reads all
+// allocation rows and writes those columns.
+export interface AllocationRow {
+  rowIndex: number;
+  timestamp: string;
+  allocationId: string;
+  id: string;               // parent FMS entry ID
+  companyName: string;
+  quntity: string;
+  productName: string;
+  location: string;
+  supplierName: string;
+  purchaseQuantity: string;
+  purchaseRate: string;
+  // Dispatch planning fields (columns Q-X)
+  acDispatch: string;       // Q  AC Dispatch (actual dispatch date)
+  dispatchQuantity: string; // R
+  deliveryDateTime: string; // S
+  rateProfiled: string;     // T
+  materialSuppliedFrom: string; // U
+  transportation: string;   // V
+  rupeesPerLtr: string;     // W
+  dispatchRemark: string;   // X
+}
+
+export interface DispatchFields {
+  acDispatch: string;
+  dispatchQuantity: string;
+  deliveryDateTime: string;
+  rateProfiled: string;
+  materialSuppliedFrom: string;
+  transportation: string;
+  rupeesPerLtr: string;
+  dispatchRemark: string;
+}
+
+// Read all Purchase Allocation rows (with dispatch fields) by fixed column position.
+export async function getPurchaseAllocationRows(): Promise<{ success: boolean; data: AllocationRow[]; error?: string }> {
+  try {
+    const response = await fetch(`${API_URL}?sheet=${encodeURIComponent(PURCHASE_ALLOCATION_SHEET)}&t=${Date.now()}`, { cache: 'no-store' });
+    const result = await response.json();
+    if (!result.success || !Array.isArray(result.data)) {
+      return { success: false, data: [], error: result.error || 'Failed to read Purchase Allocation' };
+    }
+
+    const data: any[][] = result.data;
+
+    // Locate header row (row 5 in the sheet).
+    let headerIdx = -1;
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      if (Array.isArray(row) && row.some(c =>
+        typeof c === 'string' &&
+        (c.toLowerCase().includes('supplier name') || c.toLowerCase().includes('allocation id'))
+      )) {
+        headerIdx = i;
+        break;
+      }
+    }
+    if (headerIdx === -1) return { success: true, data: [] };
+
+    const str = (v: any) => (v === null || v === undefined) ? '' : String(v);
+    const rows: AllocationRow[] = [];
+
+    for (let i = headerIdx + 1; i < data.length; i++) {
+      const row = data[i];
+      if (!Array.isArray(row)) continue;
+      const id = str(row[2]).trim();          // C  ID
+      const supplier = str(row[9]).trim();     // J  Supplier Name
+      if (!id && !supplier) continue;          // skip blank rows
+
+      rows.push({
+        rowIndex: i + 1,
+        timestamp: str(row[0]),                // A
+        allocationId: str(row[1]),             // B
+        id,                                    // C
+        companyName: str(row[3]),              // D
+        quntity: str(row[4]),                  // E
+        productName: str(row[5]),              // F
+        location: str(row[6]),                 // G
+        supplierName: supplier,                // J
+        purchaseQuantity: str(row[10]),        // K
+        purchaseRate: str(row[11]),            // L
+        acDispatch: formatToDDMMYYYY(row[16]), // Q
+        dispatchQuantity: str(row[17]),        // R
+        deliveryDateTime: str(row[18]),        // S
+        rateProfiled: str(row[19]),            // T
+        materialSuppliedFrom: str(row[20]),    // U
+        transportation: str(row[21]),          // V
+        rupeesPerLtr: str(row[22]),            // W
+        dispatchRemark: str(row[23])           // X
+      });
+    }
+
+    return { success: true, data: rows };
+  } catch (err: any) {
+    return { success: false, data: [], error: err.message || 'Network error reading Purchase Allocation' };
+  }
+}
+
+// Write the dispatch-planning fields (columns R-X = 18-24) for one allocation row.
+export async function updateDispatchPlanning(
+  rowIndex: number,
+  f: DispatchFields
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const writes: Array<[number, any]> = [
+      [17, f.acDispatch],             // Q  AC Dispatch (actual dispatch date)
+      [18, f.dispatchQuantity],       // R  Dispatch Quantity
+      [19, f.deliveryDateTime],       // S  Delivery Date Time
+      [20, f.rateProfiled],           // T  Rate
+      [21, f.materialSuppliedFrom],   // U  Matreial To Be supplied From
+      [22, f.transportation],         // V  Transportation
+      [23, f.rupeesPerLtr],           // W  Rupies /ltr
+      [24, f.dispatchRemark]          // X  Remark
+    ];
+    for (const [col, val] of writes) {
+      const r = await updateCellValue(PURCHASE_ALLOCATION_SHEET, rowIndex, col, val);
+      if (!r.success) return { success: false, error: r.error || 'Failed to update dispatch planning' };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error updating dispatch planning' };
+  }
+}
+
+// ============== DISPATCH SHEET ==============
+// Dispatch updates are stored as one row per allocation in the 'Dispatch' sheet
+// (columns A-N). Re-editing an allocation replaces its existing Dispatch row.
+export const DISPATCH_SHEET = 'Dispatch';
+
+export interface DispatchRecord {
+  rowIndex: number;
+  timestamp: string;            // A  Timetamp
+  dispatchId: string;           // B  Dispatch ID
+  allocationId: string;         // C  Allocation ID
+  id: string;                   // D  ID
+  companyName: string;          // E  Company Name
+  quntity: string;              // F  Quntity
+  productName: string;          // G  Product Name
+  dispatchQuantity: string;     // H  Dispatch Quantity
+  deliveryDateTime: string;     // I  Delivery Date Time
+  rate: string;                 // J  Rate
+  materialSuppliedFrom: string; // K  Matreial To Be supplied From
+  transportation: string;       // L  Transportation
+  rupeesPerLtr: string;         // M  Rupies /ltr
+  dispatchRemark: string;       // N  Remark
+  acDispatchStatus?: string;    // O  AC Dispatch Status
+  statusTimeDelay1?: string;    // P  Time Delay1
+  dispatchStatus?: string;      // Q  Dispatch Status
+  statusDispatchQty?: string;   // R  Dispatch QTY
+  statusDispatchDate?: string;  // S  Dispatch Date
+  invoiceVendor?: string;       // T  Upload Invoice Recievd From Vender
+  taxInvoiceWayBill?: string;   // U  Uplaod Tax Invoice With way Bill
+}
+
+const makeDispatchId = (allocationId: string): string => {
+  if (!allocationId) return `DSP-${Date.now()}/D1`;
+  // Keep the full allocation ID and append the dispatch suffix, e.g. IND/1/A2 -> IND/1/A2/D1
+  return `${allocationId}/D1`;
+};
+
+// Read all rows from the 'Dispatch' sheet by fixed column position (A-N).
+export async function getDispatchRows(): Promise<{ success: boolean; data: DispatchRecord[]; error?: string }> {
+  try {
+    const response = await fetch(`${API_URL}?sheet=${encodeURIComponent(DISPATCH_SHEET)}&t=${Date.now()}`, { cache: 'no-store' });
+    const result = await response.json();
+    if (!result.success || !Array.isArray(result.data)) {
+      return { success: false, data: [], error: result.error || 'Failed to read Dispatch sheet' };
+    }
+
+    const data: any[][] = result.data;
+    let headerIdx = -1;
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      if (Array.isArray(row) && row.some(c =>
+        typeof c === 'string' &&
+        (c.toLowerCase().includes('dispatch id') || c.toLowerCase().includes('allocation id'))
+      )) {
+        headerIdx = i;
+        break;
+      }
+    }
+    if (headerIdx === -1) return { success: true, data: [] };
+
+    const str = (v: any) => (v === null || v === undefined) ? '' : String(v);
+    const rows: DispatchRecord[] = [];
+    for (let i = headerIdx + 1; i < data.length; i++) {
+      const row = data[i];
+      if (!Array.isArray(row)) continue;
+      const allocationId = str(row[2]).trim();
+      const id = str(row[3]).trim();
+      if (!allocationId && !id) continue;
+
+      rows.push({
+        rowIndex: i + 1,
+        timestamp: formatToDDMMYYYY(row[0]),
+        dispatchId: str(row[1]),
+        allocationId,
+        id,
+        companyName: str(row[4]),
+        quntity: str(row[5]),
+        productName: str(row[6]),
+        dispatchQuantity: str(row[7]),
+        deliveryDateTime: str(row[8]),
+        rate: str(row[9]),
+        materialSuppliedFrom: str(row[10]),
+        transportation: str(row[11]),
+        rupeesPerLtr: str(row[12]),
+        dispatchRemark: str(row[13]),
+        acDispatchStatus: str(row[14]),
+        statusTimeDelay1: str(row[15]),
+        dispatchStatus: str(row[16]),
+        statusDispatchQty: str(row[17]),
+        statusDispatchDate: formatToDDMMYYYY(row[18]),
+        invoiceVendor: str(row[19]),
+        taxInvoiceWayBill: str(row[20])
+      });
+    }
+    return { success: true, data: rows };
+  } catch (err: any) {
+    return { success: false, data: [], error: err.message || 'Network error reading Dispatch sheet' };
+  }
+}
+
+// Append a dispatch record to the 'Dispatch' sheet. Each save is a separate
+// (partial) dispatch — an order can be dispatched in several parts — so we do
+// NOT delete prior rows; we just number the new one (…/D1, …/D2, …).
+export async function saveDispatchRecord(
+  row: AllocationRow,
+  f: DispatchFields
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Number the new dispatch based on how many already exist for this allocation.
+    const existing = await getDispatchRows();
+    const target = (row.allocationId || '').trim().toLowerCase();
+    const priorCount = target
+      ? existing.data.filter(d => d.allocationId.trim().toLowerCase() === target).length
+      : 0;
+
+    const timestamp = f.acDispatch || '';
+    const dispatchId = row.allocationId
+      ? `${row.allocationId}/D${priorCount + 1}`
+      : makeDispatchId(row.allocationId);
+
+    // Insert the new row (columns A-N).
+    const rowData = [
+      timestamp,                    // A  Timetamp
+      dispatchId,                   // B  Dispatch ID
+      row.allocationId || '',       // C  Allocation ID
+      row.id || '',                 // D  ID
+      row.companyName || '',        // E  Company Name
+      row.quntity || '',            // F  Quntity
+      row.productName || '',        // G  Product Name
+      f.dispatchQuantity || '',     // H  Dispatch Quantity
+      f.deliveryDateTime || '',     // I  Delivery Date Time
+      f.rateProfiled || '',         // J  Rate
+      f.materialSuppliedFrom || '', // K  Matreial To Be supplied From
+      f.transportation || '',       // L  Transportation
+      f.rupeesPerLtr || '',         // M  Rupies /ltr
+      f.dispatchRemark || ''        // N  Remark
+    ];
+
+    // Send as a form-encoded POST body (robust for longer values, no URL limit).
+    const body = new URLSearchParams();
+    body.append('sheetName', DISPATCH_SHEET);
+    body.append('action', 'insert');
+    body.append('rowData', JSON.stringify(rowData));
+    const res = await fetch(API_URL, { method: 'POST', body });
+    const j = await res.json();
+    if (j.success) return { success: true };
+    return { success: false, error: j.error || 'Failed to write Dispatch row' };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error writing Dispatch sheet' };
+  }
+}
+
+export async function updateDispatchStatusInSheet(
+  rowIndex: number,
+  fields: {
+    acDispatchStatus: string;
+    statusTimeDelay1: string;
+    dispatchStatus: string;
+    statusDispatchQty: string;
+    statusDispatchDate: string;
+    invoiceVendor: string;
+    taxInvoiceWayBill: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const writes: Array<[number, any]> = [
+      [14, fields.acDispatchStatus],     // O
+      [15, fields.statusTimeDelay1],     // P
+      [16, fields.dispatchStatus],       // Q
+      [17, fields.statusDispatchQty],    // R
+      [18, fields.statusDispatchDate],   // S
+      [19, fields.invoiceVendor],        // T
+      [20, fields.taxInvoiceWayBill]     // U
+    ];
+    for (const [col, val] of writes) {
+      const r = await updateCellValue(DISPATCH_SHEET, rowIndex, col, val);
+      if (!r.success) return { success: false, error: r.error || 'Failed to update dispatch status' };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error updating dispatch status' };
+  }
 }

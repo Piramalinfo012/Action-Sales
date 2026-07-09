@@ -1,14 +1,18 @@
+import { useState } from 'react';
 import { 
-  LayoutDashboard, 
-  PlusCircle, 
-  Clock, 
-  History, 
+  LayoutDashboard,
+  PlusCircle,
+  Truck,
+  History,
   BarChart3, 
   FolderOpen,
   Settings as SettingsIcon, 
   LogOut,
   User,
-  Shield
+  Shield,
+  Activity,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { SidebarTab, User as UserType } from '../types';
 
@@ -20,10 +24,12 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: SidebarProps) {
+  const [isDispatchOpen, setIsDispatchOpen] = useState(activeTab === 'pending' || activeTab === 'dispatch-status');
+
   const menuItems = [
     { id: 'dashboard' as SidebarTab, label: 'Dashboard', icon: LayoutDashboard, roles: ['Admin', 'Sales', 'Manager'] },
     { id: 'new-action' as SidebarTab, label: 'Auction Ident', icon: PlusCircle, roles: ['Admin', 'Sales'] },
-    { id: 'pending' as SidebarTab, label: 'Pending Sync', icon: Clock, roles: ['Admin', 'Manager'] },
+    { id: 'pending' as SidebarTab, label: 'Dispatch', icon: Truck, roles: ['Admin', 'Manager'] },
     { id: 'history' as SidebarTab, label: 'History', icon: History, roles: ['Admin', 'Sales', 'Manager'] },
     { id: 'reports' as SidebarTab, label: 'Reports', icon: BarChart3, roles: ['Admin', 'Manager'] },
     { id: 'drive-folder' as SidebarTab, label: 'Shared Drive', icon: FolderOpen, roles: ['Admin', 'Sales', 'Manager'] },
@@ -70,6 +76,55 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1.5">
         {allowedMenuItems.map((item) => {
+          if (item.id === 'pending') {
+            const isDispatchActive = activeTab === 'pending' || activeTab === 'dispatch-status';
+            return (
+              <div key="dispatch-group" className="space-y-1">
+                <button
+                  onClick={() => setIsDispatchOpen(!isDispatchOpen)}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer ${
+                    isDispatchActive && !isDispatchOpen
+                      ? 'bg-blue-600/10 text-blue-400'
+                      : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-3.5">
+                    <Truck className={`w-5 h-5 transition-transform duration-300 ${isDispatchActive ? 'text-blue-400 scale-110' : ''}`} />
+                    <span>{item.label}</span>
+                  </div>
+                  {isDispatchOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                </button>
+                
+                {isDispatchOpen && (
+                  <div className="pl-12 pr-2 space-y-1 mt-1">
+                    <button
+                      onClick={() => setActiveTab('pending')}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 cursor-pointer ${
+                        activeTab === 'pending'
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/15'
+                          : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
+                      }`}
+                    >
+                      <Truck className="w-4 h-4" />
+                      <span>Dispatch Planning</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('dispatch-status')}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 cursor-pointer ${
+                        activeTab === 'dispatch-status'
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/15'
+                          : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
+                      }`}
+                    >
+                      <Activity className="w-4 h-4" />
+                      <span>Dispatch Status</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          }
+
           const Icon = item.icon;
           const isActive = activeTab === item.id;
           return (
@@ -84,11 +139,6 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
             >
               <Icon className={`w-5 h-5 transition-transform duration-300 ${isActive ? 'scale-110' : ''}`} />
               <span>{item.label}</span>
-              {item.id === 'pending' && (
-                <span className="ml-auto bg-amber-500/10 text-amber-500 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/20 animate-pulse">
-                  Alert
-                </span>
-              )}
             </button>
           );
         })}

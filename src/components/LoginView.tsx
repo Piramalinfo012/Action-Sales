@@ -24,7 +24,9 @@ import {
   Cpu,
   RefreshCw,
   Gauge,
-  Droplet
+  Droplet,
+  Loader2,
+  Fingerprint
 } from 'lucide-react';
 import { getUsersFromSheet } from '../api';
 import { User as UserType } from '../types';
@@ -193,6 +195,24 @@ export default function LoginView({ onLoginSuccess, onAddToast }: LoginViewProps
     } else if (userRole === 'admin') {
       setUsername('admin');
       setPassword('admin123');
+    }
+  };
+
+  // Staggered reveal choreography for the access panel
+  const cardContainer = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: { staggerChildren: 0.09, delayChildren: 0.15 }
+    }
+  };
+  const cardItem = {
+    hidden: { opacity: 0, y: 16, filter: 'blur(6px)' },
+    show: {
+      opacity: 1,
+      y: 0,
+      filter: 'blur(0px)',
+      transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] }
     }
   };
 
@@ -618,10 +638,20 @@ export default function LoginView({ onLoginSuccess, onAddToast }: LoginViewProps
       <div className="lg:col-span-5 flex flex-col justify-center items-center p-6 sm:p-12 relative">
         
         {/* Mobile Header Bar (Only visible if mobile/tablet) */}
-        <div className="lg:hidden flex flex-col items-center text-center space-y-3 mb-8 mt-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/20">
+        <motion.div
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+          className="lg:hidden flex flex-col items-center text-center space-y-3 mb-8 mt-4"
+        >
+          <motion.div
+            initial={{ scale: 0.6, rotate: -12 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 14, delay: 0.1 }}
+            className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/20"
+          >
             <Building2 className="w-7 h-7" />
-          </div>
+          </motion.div>
           <div>
             <h1 className="font-extrabold text-white tracking-tight text-xl">
               Piramal Petroleum
@@ -630,33 +660,67 @@ export default function LoginView({ onLoginSuccess, onAddToast }: LoginViewProps
               Action Sales System
             </p>
           </div>
-        </div>
+        </motion.div>
+
+        {/* Animated ambient glow orbiting behind the card */}
+        <motion.div
+          aria-hidden
+          className="absolute w-[min(28rem,90vw)] h-[26rem] rounded-full bg-gradient-to-tr from-blue-600/20 via-indigo-600/15 to-violet-600/20 blur-[90px] pointer-events-none"
+          animate={{
+            scale: [1, 1.12, 1],
+            opacity: [0.5, 0.8, 0.5],
+            rotate: [0, 18, 0]
+          }}
+          transition={{ duration: 9, ease: 'easeInOut', repeat: Infinity }}
+        />
 
         {/* Access Box Card: Beautiful specular glass highlight */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 15 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
+          variants={cardContainer}
+          initial="hidden"
+          animate="show"
+          whileHover={{ y: -4, transition: { duration: 0.4, ease: 'easeOut' } }}
           className="w-full max-w-md glass-card rounded-3xl p-8 relative overflow-hidden flex flex-col gap-6 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
         >
           {/* Subtle accent corner light */}
-          <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-br from-indigo-500/10 to-violet-500/10 rounded-full blur-2xl" />
+          <motion.div
+            aria-hidden
+            className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-br from-indigo-500/20 to-violet-500/20 rounded-full blur-2xl"
+            animate={{ opacity: [0.6, 1, 0.6], scale: [1, 1.15, 1] }}
+            transition={{ duration: 5, ease: 'easeInOut', repeat: Infinity }}
+          />
+          {/* Sweeping specular highlight across the glass */}
+          <motion.div
+            aria-hidden
+            className="absolute -inset-y-4 w-24 -skew-x-12 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none"
+            initial={{ left: '-30%' }}
+            animate={{ left: ['-30%', '130%'] }}
+            transition={{ duration: 6, ease: 'easeInOut', repeat: Infinity, repeatDelay: 3 }}
+          />
 
           {/* Form Header Title */}
-          <div className="space-y-1">
+          <motion.div variants={cardItem} className="space-y-1 relative">
             <span className="text-[10px] font-extrabold text-indigo-400 uppercase tracking-widest block bg-indigo-950/40 border border-indigo-900/50 w-fit px-2.5 py-0.5 rounded-full">
               {getGreeting()}, Officer
             </span>
-            <h2 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
+            <h2 className="text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
+              <motion.span
+                initial={{ scale: 0.5, rotate: -20, opacity: 0 }}
+                animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 220, damping: 13, delay: 0.35 }}
+                className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/30"
+              >
+                <Fingerprint className="w-4.5 h-4.5 text-white" />
+              </motion.span>
               Secure Login Portal
             </h2>
             <p className="text-xs text-slate-400 font-medium leading-relaxed">
               Authenticate using credentials linked to your G-Sheet database records.
             </p>
-          </div>
+          </motion.div>
 
           {/* Quick Demo Passes Panel: Premium Microchip style cards */}
-          <div className="space-y-2.5 bg-slate-900/50 border border-slate-900 p-4 rounded-2xl">
+          <motion.div variants={cardItem} className="space-y-2.5 bg-slate-900/50 border border-slate-900 p-4 rounded-2xl relative">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-extrabold text-indigo-400 uppercase tracking-wider flex items-center gap-1">
                 <Zap className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
@@ -664,50 +728,63 @@ export default function LoginView({ onLoginSuccess, onAddToast }: LoginViewProps
               </span>
               <span className="text-[9px] text-slate-500 font-bold">One-click load</span>
             </div>
-            
+
             <div className="grid grid-cols-3 gap-2">
-              <button
+              <motion.button
                 type="button"
                 onClick={() => handleQuickDemoPass('sales')}
-                className="py-2.5 px-1.5 text-[10px] font-bold text-slate-300 hover:text-white bg-slate-950/70 border border-slate-900 hover:border-blue-500/50 hover:bg-blue-950/10 rounded-xl transition-all cursor-pointer text-center truncate flex flex-col items-center gap-1.5 group"
+                whileHover={{ y: -3, scale: 1.03 }}
+                whileTap={{ scale: 0.96 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                className="py-2.5 px-1.5 text-[10px] font-bold text-slate-300 hover:text-white bg-slate-950/70 border border-slate-900 hover:border-blue-500/50 hover:bg-blue-950/10 rounded-xl cursor-pointer text-center truncate flex flex-col items-center gap-1.5 group"
               >
                 <div className="w-5 h-5 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 font-bold text-[9px] group-hover:bg-blue-500/20 transition-all">SE</div>
                 <span>Sales Exec</span>
-              </button>
-              
-              <button
+              </motion.button>
+
+              <motion.button
                 type="button"
                 onClick={() => handleQuickDemoPass('manager')}
-                className="py-2.5 px-1.5 text-[10px] font-bold text-slate-300 hover:text-white bg-slate-950/70 border border-slate-900 hover:border-indigo-500/50 hover:bg-indigo-950/10 rounded-xl transition-all cursor-pointer text-center truncate flex flex-col items-center gap-1.5 group"
+                whileHover={{ y: -3, scale: 1.03 }}
+                whileTap={{ scale: 0.96 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                className="py-2.5 px-1.5 text-[10px] font-bold text-slate-300 hover:text-white bg-slate-950/70 border border-slate-900 hover:border-indigo-500/50 hover:bg-indigo-950/10 rounded-xl cursor-pointer text-center truncate flex flex-col items-center gap-1.5 group"
               >
                 <div className="w-5 h-5 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 font-bold text-[9px] group-hover:bg-indigo-500/20 transition-all">MN</div>
                 <span>Manager</span>
-              </button>
-              
-              <button
+              </motion.button>
+
+              <motion.button
                 type="button"
                 onClick={() => handleQuickDemoPass('admin')}
-                className="py-2.5 px-1.5 text-[10px] font-bold text-slate-300 hover:text-white bg-slate-950/70 border border-slate-900 hover:border-violet-500/50 hover:bg-violet-950/10 rounded-xl transition-all cursor-pointer text-center truncate flex flex-col items-center gap-1.5 group"
+                whileHover={{ y: -3, scale: 1.03 }}
+                whileTap={{ scale: 0.96 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                className="py-2.5 px-1.5 text-[10px] font-bold text-slate-300 hover:text-white bg-slate-950/70 border border-slate-900 hover:border-violet-500/50 hover:bg-violet-950/10 rounded-xl cursor-pointer text-center truncate flex flex-col items-center gap-1.5 group"
               >
                 <div className="w-5 h-5 rounded-lg bg-violet-500/10 flex items-center justify-center text-violet-400 font-bold text-[9px] group-hover:bg-violet-500/20 transition-all">AD</div>
                 <span>Admin Root</span>
-              </button>
+              </motion.button>
             </div>
-          </div>
+          </motion.div>
 
           {/* Core Authorization Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            
-            {errorMsg && (
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="p-3.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl text-xs font-semibold flex items-center gap-2.5 shadow-md"
-              >
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-                <span>{errorMsg}</span>
-              </motion.div>
-            )}
+          <motion.form variants={cardItem} onSubmit={handleSubmit} className="space-y-4">
+
+            <AnimatePresence>
+              {errorMsg && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                  animate={{ opacity: 1, height: 'auto', marginBottom: 0, x: [0, -8, 8, -6, 6, 0] }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ x: { duration: 0.4 }, duration: 0.3 }}
+                  className="p-3.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl text-xs font-semibold flex items-center gap-2.5 shadow-md overflow-hidden"
+                >
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                  <span>{errorMsg}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Username Field */}
             <div className="space-y-1.5">
@@ -760,18 +837,46 @@ export default function LoginView({ onLoginSuccess, onAddToast }: LoginViewProps
             </div>
 
             {/* Submit Button */}
-            <button
+            <motion.button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white font-bold text-sm py-4 rounded-2xl shadow-lg shadow-blue-500/10 hover:shadow-indigo-500/20 hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-55 cursor-pointer mt-2"
+              whileHover={{ scale: isLoading ? 1 : 1.015 }}
+              whileTap={{ scale: isLoading ? 1 : 0.985 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+              className="group relative w-full overflow-hidden bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 text-white font-bold text-sm py-4 rounded-2xl shadow-lg shadow-blue-500/10 hover:shadow-indigo-500/30 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer mt-2"
             >
-              <span>{isLoading ? 'ESTABLISHING API HANDSHAKE...' : 'CONNECT TO SECURE SERVER'}</span>
-              {!isLoading && <ArrowRight className="w-4.5 h-4.5" />}
-            </button>
-          </form>
+              {/* Animated sheen sweep on hover */}
+              <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out bg-gradient-to-r from-transparent via-white/25 to-transparent" />
+              <AnimatePresence mode="wait" initial={false}>
+                {isLoading ? (
+                  <motion.span
+                    key="loading"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    className="relative flex items-center gap-2"
+                  >
+                    <Loader2 className="w-4.5 h-4.5 animate-spin" />
+                    ESTABLISHING API HANDSHAKE...
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="idle"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    className="relative flex items-center gap-2"
+                  >
+                    CONNECT TO SECURE SERVER
+                    <ArrowRight className="w-4.5 h-4.5 group-hover:translate-x-1 transition-transform" />
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </motion.button>
+          </motion.form>
 
           {/* Secure Audit Badges */}
-          <div className="border-t border-slate-900/80 pt-5 flex items-center justify-between text-[10px] text-slate-500 font-semibold">
+          <motion.div variants={cardItem} className="border-t border-slate-900/80 pt-5 flex items-center justify-between text-[10px] text-slate-500 font-semibold">
             <div className="flex items-center gap-1.5">
               <Database className="w-3.5 h-3.5 text-slate-600" />
               <span>G-Sheet Live Replication</span>
@@ -780,7 +885,7 @@ export default function LoginView({ onLoginSuccess, onAddToast }: LoginViewProps
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
               <span>SHA-256 TLS Tunnel</span>
             </div>
-          </div>
+          </motion.div>
         </motion.div>
 
         {/* Corporate Security Warning */}
