@@ -17,7 +17,7 @@ import {
 import { getDispatchRows, DispatchRecord, updateDispatchStatusInSheet, API_URL } from '../api';
 
 const INVOICE_FOLDER_ID = '1HBi8BusMyDY_lQ1b7iJEJQvcuqayThu_';
-type UploadKey = 'invoiceVendor' | 'taxInvoiceWayBill';
+type UploadKey = 'invoiceVendor' | 'taxInvoiceWayBill' | 'uploadTransportationBill';
 
 interface DispatchStatusViewProps {
   onAddToast?: (type: any, title: string, desc: string) => void;
@@ -35,18 +35,19 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
   const [isSaving, setIsSaving] = useState(false);
   const [fields, setFields] = useState({
     acDispatchStatus: '',
-    statusTimeDelay1: '',
     dispatchStatus: '',
     statusDispatchQty: '',
     statusDispatchDate: '',
     invoiceVendor: '',
-    taxInvoiceWayBill: ''
+    taxInvoiceWayBill: '',
+    uploadTransportationBill: ''
   });
 
   // Per-field file upload progress/metadata
   const [uploads, setUploads] = useState<Record<UploadKey, { uploading: boolean; progress: number; fileName?: string; fileSize?: string }>>({
     invoiceVendor: { uploading: false, progress: 0 },
-    taxInvoiceWayBill: { uploading: false, progress: 0 }
+    taxInvoiceWayBill: { uploading: false, progress: 0 },
+    uploadTransportationBill: { uploading: false, progress: 0 }
   });
 
   // Upload a file to Google Drive and store its URL in the matching field.
@@ -150,12 +151,12 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
     setEditingRow(row);
     setFields({
       acDispatchStatus: row.acDispatchStatus || '',
-      statusTimeDelay1: row.statusTimeDelay1 || '',
       dispatchStatus: row.dispatchStatus || '',
       statusDispatchQty: row.statusDispatchQty || '',
       statusDispatchDate: row.statusDispatchDate || '',
       invoiceVendor: row.invoiceVendor || '',
-      taxInvoiceWayBill: row.taxInvoiceWayBill || ''
+      taxInvoiceWayBill: row.taxInvoiceWayBill || '',
+      uploadTransportationBill: row.uploadTransportationBill || ''
     });
   };
 
@@ -550,6 +551,10 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
                   <span className="font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-500/20">{formatDateTime(editingRow.deliveryDateTime)}</span>
                 </div>
                 <div>
+                  <span className="block text-[10px] font-semibold text-slate-400 mb-0.5">Planned Qty</span>
+                  <span className="font-bold text-slate-700 dark:text-slate-200">{editingRow.dispatchQuantity || '—'}</span>
+                </div>
+                <div>
                   <span className="block text-[10px] font-semibold text-slate-400 mb-0.5">Rate</span>
                   <span className="font-bold text-slate-700 dark:text-slate-200">{editingRow.rate || '—'}</span>
                 </div>
@@ -623,9 +628,10 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
               {/* Uploads — file upload to Google Drive */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                 {([
-                  { key: 'invoiceVendor', label: 'Upload Invoice Recievd From Vender' },
-                  { key: 'taxInvoiceWayBill', label: 'Uplaod Tax Invoice With way Bill' }
-                ] as const).map(({ key, label }) => {
+                  { key: 'invoiceVendor' as UploadKey, label: 'Upload Invoice Recievd From Vender', show: true },
+                  { key: 'taxInvoiceWayBill' as UploadKey, label: 'Uplaod Tax Invoice With way Bill', show: true },
+                  { key: 'uploadTransportationBill' as UploadKey, label: 'Upload Tranporation Bill', show: editingRow.transportation?.trim() === 'Own Transport(PPPL)' }
+                ]).filter(item => item.show).map(({ key, label }) => {
                   const up = uploads[key];
                   const url = fields[key];
                   const inputId = `dispatch-status-file-${key}`;

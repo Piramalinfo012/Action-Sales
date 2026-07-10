@@ -16,7 +16,7 @@ import {
 import { getDispatchRows, DispatchRecord, updateMaterialReceiptInSheet, API_URL } from '../api';
 
 const RECEIPT_FOLDER_ID = '1HBi8BusMyDY_lQ1b7iJEJQvcuqayThu_';
-type UploadKey = 'uploadReceiving' | 'uploadVendorCreditNote';
+type UploadKey = 'uploadReceiving' | 'uploadVendorCreditNote' | 'creditNoteRequested';
 
 interface MaterialReceiptViewProps {
   onAddToast?: (type: any, title: string, desc: string) => void;
@@ -37,12 +37,15 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
     shortageQty: '',
     creditNoteRequested: '',
     invoiceReviewDecision: '',
-    uploadVendorCreditNote: ''
+    uploadVendorCreditNote: '',
+    gateInDateTime: '',
+    gateOutDateTime: ''
   });
 
   const [uploads, setUploads] = useState<Record<UploadKey, { uploading: boolean; progress: number; fileName?: string; fileSize?: string }>>({
     uploadReceiving: { uploading: false, progress: 0 },
-    uploadVendorCreditNote: { uploading: false, progress: 0 }
+    uploadVendorCreditNote: { uploading: false, progress: 0 },
+    creditNoteRequested: { uploading: false, progress: 0 }
   });
 
   const formatDate = (dateStr: string) => {
@@ -171,11 +174,14 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
       shortageQty: row.shortageQty || '',
       creditNoteRequested: row.creditNoteRequested || '',
       invoiceReviewDecision: row.invoiceReviewDecision || '',
-      uploadVendorCreditNote: row.uploadVendorCreditNote || ''
+      uploadVendorCreditNote: row.uploadVendorCreditNote || '',
+      gateInDateTime: row.gateInDateTime || '',
+      gateOutDateTime: row.gateOutDateTime || ''
     });
     setUploads({
       uploadReceiving: { uploading: false, progress: row.uploadReceiving ? 100 : 0, fileName: row.uploadReceiving ? 'Uploaded file' : undefined },
-      uploadVendorCreditNote: { uploading: false, progress: row.uploadVendorCreditNote ? 100 : 0, fileName: row.uploadVendorCreditNote ? 'Uploaded file' : undefined }
+      uploadVendorCreditNote: { uploading: false, progress: row.uploadVendorCreditNote ? 100 : 0, fileName: row.uploadVendorCreditNote ? 'Uploaded file' : undefined },
+      creditNoteRequested: { uploading: false, progress: row.creditNoteRequested ? 100 : 0, fileName: row.creditNoteRequested ? 'Uploaded file' : undefined }
     });
   };
 
@@ -553,16 +559,8 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
                 {/* Uplaod Recieving — file upload */}
                 {renderUpload('uploadReceiving', 'Uplaod Recieving')}
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Credit Note Requested by Party (If Any)</label>
-                  <input
-                    type="text"
-                    value={fields.creditNoteRequested}
-                    onChange={(e) => setFields({ ...fields, creditNoteRequested: e.target.value })}
-                    placeholder="e.g. Yes / No / Amount"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-semibold transition-all"
-                  />
-                </div>
+                {/* Credit Note Requested by Party (If Any) — file upload */}
+                {renderUpload('creditNoteRequested', 'Credit Note Requested by Party (If Any)')}
 
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Invoice Review &amp; Credit Note Decision</label>
@@ -577,6 +575,43 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
 
                 {/* Upload Vendor Credit Note — file upload */}
                 {renderUpload('uploadVendorCreditNote', 'Upload Vendor Credit Note')}
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Gate In Date &amp; Time</label>
+                  <input
+                    type="datetime-local"
+                    value={fields.gateInDateTime}
+                    onChange={(e) => setFields({ ...fields, gateInDateTime: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-semibold transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Gate Out Date &amp; Time</label>
+                  <input
+                    type="datetime-local"
+                    value={fields.gateOutDateTime}
+                    onChange={(e) => setFields({ ...fields, gateOutDateTime: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-semibold transition-all"
+                  />
+                </div>
+
+                {fields.gateInDateTime && fields.gateOutDateTime && (
+                  <div className="col-span-1 md:col-span-2 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl p-3 flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Unloading Duration</span>
+                    <span className="text-sm font-black text-emerald-700 dark:text-emerald-300">
+                      {(() => {
+                        const d1 = new Date(fields.gateInDateTime);
+                        const d2 = new Date(fields.gateOutDateTime);
+                        if (!isNaN(d1.getTime()) && !isNaN(d2.getTime())) {
+                          const diff = (d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24);
+                          return diff > 0 ? diff.toFixed(2) + ' days' : '0 days';
+                        }
+                        return '—';
+                      })()}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">

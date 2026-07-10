@@ -726,7 +726,7 @@ export interface DispatchRecord {
   rupeesPerLtr: string;         // M  Rupies /ltr
   dispatchRemark: string;       // N  Remark
   acDispatchStatus?: string;    // P  AC Dispatch Status
-  statusTimeDelay1?: string;    // Q  Time Delay1
+  uploadTransportationBill?: string; // Q Upload Transportation Bill
   dispatchStatus?: string;      // R  Dispatch Status
   statusDispatchQty?: string;   // S  Dispatch QTY
   statusDispatchDate?: string;  // T  Dispatch Date
@@ -762,6 +762,9 @@ export interface DispatchRecord {
   uploadInvoiceEwayBill?: string;   // AU Uplaod Invoice /E-way Bill
   transportBill?: string;           // AV Tranport Bill
   makePaymentRemark?: string;       // AW Remark
+  
+  gateInDateTime?: string;          // AX Gate In Date Time
+  gateOutDateTime?: string;         // AY Gate Out Date Time
 }
 
 const makeDispatchId = (allocationId: string): string => {
@@ -820,7 +823,7 @@ export async function getDispatchRows(): Promise<{ success: boolean; data: Dispa
         dispatchRemark: str(row[13]),      // N  Remark
         // O (row[14]) = "PI Dispatch Staus" — not a form field, skipped.
         acDispatchStatus: formatToDDMMYYYY(row[15]), // P  AC Dispatch Status
-        statusTimeDelay1: str(row[16]),    // Q  Time Delay1
+        uploadTransportationBill: str(row[16]),    // Q  Upload Transportation Bill
         dispatchStatus: str(row[17]),      // R  Dispatch Status
         statusDispatchQty: str(row[18]),   // S  Dispatch QTY
         statusDispatchDate: formatToDDMMYYYY(row[19]), // T  Dispatch Date
@@ -851,7 +854,9 @@ export async function getDispatchRows(): Promise<{ success: boolean; data: Dispa
         makePaymentTimeDelay1: str(row[45]),      // AT Time Delay1
         uploadInvoiceEwayBill: str(row[46]),      // AU Uplaod Invoice /E-way Bill
         transportBill: str(row[47]),              // AV Tranport Bill
-        makePaymentRemark: str(row[48])           // AW Remark
+        makePaymentRemark: str(row[48]),          // AW Remark
+        gateInDateTime: str(row[49]),             // AX Gate In Date Time
+        gateOutDateTime: str(row[50])             // AY Gate Out Date Time
       });
     }
     return { success: true, data: rows };
@@ -916,7 +921,7 @@ export async function updateDispatchStatusInSheet(
   rowIndex: number,
   fields: {
     acDispatchStatus: string;
-    statusTimeDelay1: string;
+    uploadTransportationBill: string;
     dispatchStatus: string;
     statusDispatchQty: string;
     statusDispatchDate: string;
@@ -928,7 +933,7 @@ export async function updateDispatchStatusInSheet(
     // Column O ("PI Dispatch Staus") is left untouched. Columns are 1-indexed.
     const writes: Array<[number, any]> = [
       [16, fields.acDispatchStatus],     // P  AC Dispatch Status (auto date)
-      [17, fields.statusTimeDelay1],     // Q  Time Delay1
+      [17, fields.uploadTransportationBill], // Q  Upload Transportation Bill
       [18, fields.dispatchStatus],       // R  Dispatch Status
       [19, fields.statusDispatchQty],    // S  Dispatch QTY
       [20, fields.statusDispatchDate],   // T  Dispatch Date
@@ -957,6 +962,8 @@ export async function updateMaterialReceiptInSheet(
     creditNoteRequested: string;
     invoiceReviewDecision: string;
     uploadVendorCreditNote: string;
+    gateInDateTime: string;
+    gateOutDateTime: string;
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
@@ -968,7 +975,9 @@ export async function updateMaterialReceiptInSheet(
       [27, fields.shortageQty],            // AA Shortage Qty (If Any)
       [28, fields.creditNoteRequested],    // AB Credit Note Requested by Party (If Any)
       [29, fields.invoiceReviewDecision],  // AC Invoice Review & Credit Note Decision
-      [30, fields.uploadVendorCreditNote]  // AD Upload Vendor Credit Note
+      [30, fields.uploadVendorCreditNote], // AD Upload Vendor Credit Note
+      [50, fields.gateInDateTime],         // AX Gate In Date Time
+      [51, fields.gateOutDateTime]         // AY Gate Out Date Time
     ];
     for (const [col, val] of writes) {
       const r = await updateCellValue(DISPATCH_SHEET, rowIndex, col, val);
