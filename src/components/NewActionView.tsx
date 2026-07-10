@@ -1029,7 +1029,27 @@ export default function NewActionView({
         <div className="overflow-x-auto -mx-6 md:-mx-8">
           <div className="inline-block min-w-full align-middle px-6 md:px-8">
             <div className="overflow-hidden border border-slate-100 dark:border-slate-800/80 rounded-2xl">
-              <table className="min-w-full divide-y divide-slate-100 dark:divide-slate-800">
+              <style>{`
+        @media (max-width: 768px) {
+          .responsive-mobile-table { display: block; width: 100%; background: transparent !important; border: none !important; }
+          .responsive-mobile-table thead { display: none; }
+          .responsive-mobile-table tbody, .responsive-mobile-table tr, .responsive-mobile-table td { display: block; width: 100%; }
+          .responsive-mobile-table tr { margin-bottom: 1.5rem; background: var(--bg-card, white); border: 1px solid rgba(0,0,0,0.1); border-radius: 1rem; padding: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+          .dark .responsive-mobile-table tr { background: rgba(30, 41, 59, 0.5); border-color: rgba(255,255,255,0.05); }
+          .responsive-mobile-table td { text-align: right !important; padding: 0.75rem 0 !important; border: none !important; position: relative; padding-left: 50% !important; min-height: 2.5rem; display: flex; justify-content: flex-end; align-items: center; white-space: normal !important; overflow: hidden; }
+          .responsive-mobile-table td::before { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 45%; text-align: left; font-weight: 700; color: #64748b; font-size: 0.7rem; text-transform: uppercase; }
+          .dark .responsive-mobile-table td::before { color: #94a3b8; }
+          /* Add horizontal lines between rows inside the card */
+          .responsive-mobile-table td:not(:last-child) { border-bottom: 1px dashed rgba(148, 163, 184, 0.25) !important; }
+          .responsive-mobile-table td:nth-of-type(1)::before { content: "ID  Date"; }
+          .responsive-mobile-table td:nth-of-type(2)::before { content: "Company  Product"; }
+          .responsive-mobile-table td:nth-of-type(3)::before { content: "Qty  Unit"; }
+          .responsive-mobile-table td:nth-of-type(4)::before { content: "Location"; }
+          .responsive-mobile-table td:nth-of-type(5)::before { content: "L1 Confirmation Details"; }
+          .responsive-mobile-table td:nth-of-type(6)::before { content: "Auction"; }
+        }
+      `}</style>
+<table className="min-w-full divide-y divide-slate-100 dark:divide-slate-800 responsive-mobile-table">
                 <thead className="bg-gradient-to-b from-slate-50 to-slate-100/40 dark:from-slate-900/70 dark:to-slate-900/40">
                   <tr>
                     <th className="px-4 py-3.5 text-left text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">

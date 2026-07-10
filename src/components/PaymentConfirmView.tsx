@@ -373,7 +373,29 @@ export default function PaymentConfirmView({ onAddToast }: PaymentConfirmViewPro
         </div>
 
         <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50">
-          <table className="w-full text-left border-collapse min-w-[1000px]">
+          <style>{`
+        @media (max-width: 768px) {
+          .responsive-mobile-table { display: block; width: 100%; background: transparent !important; border: none !important; }
+          .responsive-mobile-table thead { display: none; }
+          .responsive-mobile-table tbody, .responsive-mobile-table tr, .responsive-mobile-table td { display: block; width: 100%; }
+          .responsive-mobile-table tr { margin-bottom: 1.5rem; background: var(--bg-card, white); border: 1px solid rgba(0,0,0,0.1); border-radius: 1rem; padding: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+          .dark .responsive-mobile-table tr { background: rgba(30, 41, 59, 0.5); border-color: rgba(255,255,255,0.05); }
+          .responsive-mobile-table td { text-align: right !important; padding: 0.75rem 0 !important; border: none !important; position: relative; padding-left: 50% !important; min-height: 2.5rem; display: flex; justify-content: flex-end; align-items: center; white-space: normal !important; overflow: hidden; }
+          .responsive-mobile-table td::before { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 45%; text-align: left; font-weight: 700; color: #64748b; font-size: 0.7rem; text-transform: uppercase; }
+          .dark .responsive-mobile-table td::before { color: #94a3b8; }
+          /* Add horizontal lines between rows inside the card */
+          .responsive-mobile-table td:not(:last-child) { border-bottom: 1px dashed rgba(148, 163, 184, 0.25) !important; }
+          .responsive-mobile-table td:nth-of-type(1)::before { content: "Company amp Product"; }
+          .responsive-mobile-table td:nth-of-type(2)::before { content: "Dispatch Qty"; }
+          .responsive-mobile-table td:nth-of-type(3)::before { content: "PI Payment"; }
+          .responsive-mobile-table td:nth-of-type(4)::before { content: "Payment Received Date"; }
+          .responsive-mobile-table td:nth-of-type(5)::before { content: "Remark"; }
+          .responsive-mobile-table td:nth-of-type(6)::before { content: "Upload"; }
+          .responsive-mobile-table td:nth-of-type(7)::before { content: "Status"; }
+          .responsive-mobile-table td:nth-of-type(8)::before { content: "Action"; }
+        }
+      `}</style>
+<table className="w-full text-left border-collapse min-w-[1000px] responsive-mobile-table">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
                 <th className="px-4 py-3.5 text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-widest w-48">Company &amp; Product</th>

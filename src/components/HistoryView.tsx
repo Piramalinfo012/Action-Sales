@@ -293,7 +293,31 @@ export default function HistoryView({
       {/* Main Table */}
       <div className="glass-card rounded-3xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left">
+          <style>{`
+        @media (max-width: 768px) {
+          .responsive-mobile-table { display: block; width: 100%; background: transparent !important; border: none !important; }
+          .responsive-mobile-table thead { display: none; }
+          .responsive-mobile-table tbody, .responsive-mobile-table tr, .responsive-mobile-table td { display: block; width: 100%; }
+          .responsive-mobile-table tr { margin-bottom: 1.5rem; background: var(--bg-card, white); border: 1px solid rgba(0,0,0,0.1); border-radius: 1rem; padding: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+          .dark .responsive-mobile-table tr { background: rgba(30, 41, 59, 0.5); border-color: rgba(255,255,255,0.05); }
+          .responsive-mobile-table td { text-align: right !important; padding: 0.75rem 0 !important; border: none !important; position: relative; padding-left: 50% !important; min-height: 2.5rem; display: flex; justify-content: flex-end; align-items: center; white-space: normal !important; overflow: hidden; }
+          .responsive-mobile-table td::before { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 45%; text-align: left; font-weight: 700; color: #64748b; font-size: 0.7rem; text-transform: uppercase; }
+          .dark .responsive-mobile-table td::before { color: #94a3b8; }
+          /* Add horizontal lines between rows inside the card */
+          .responsive-mobile-table td:not(:last-child) { border-bottom: 1px dashed rgba(148, 163, 184, 0.25) !important; }
+          .responsive-mobile-table td:nth-of-type(1)::before { content: "Timetamp"; }
+          .responsive-mobile-table td:nth-of-type(2)::before { content: "ID"; }
+          .responsive-mobile-table td:nth-of-type(3)::before { content: "Company Name"; }
+          .responsive-mobile-table td:nth-of-type(4)::before { content: "Quntity"; }
+          .responsive-mobile-table td:nth-of-type(5)::before { content: "Unit"; }
+          .responsive-mobile-table td:nth-of-type(6)::before { content: "Product Name"; }
+          .responsive-mobile-table td:nth-of-type(7)::before { content: "Location"; }
+          .responsive-mobile-table td:nth-of-type(8)::before { content: "L1 Confirmation"; }
+          .responsive-mobile-table td:nth-of-type(9)::before { content: "Remark"; }
+          .responsive-mobile-table td:nth-of-type(10)::before { content: "Auction"; }
+        }
+      `}</style>
+<table className="w-full border-collapse text-left responsive-mobile-table">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800/80 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
                 <th className="py-4 px-6 select-none cursor-pointer hover:text-slate-700 dark:hover:text-slate-200" onClick={() => handleSort('timestamp')}>
