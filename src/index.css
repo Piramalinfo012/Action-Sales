@@ -6,6 +6,17 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/* Global scaling for laptops to prevent cropping at 100% zoom */
+html {
+  font-size: 13.5px; /* Scales down all Tailwind rem utilities by ~15% */
+}
+
+@media (max-width: 1366px) {
+  html {
+    font-size: 12px; /* Even smaller scaling for 1366x768 screens */
+  }
+}
+
 /* Premium Sleek Interface Styling Utilities */
 
 .sleek-bg-light {
@@ -79,28 +90,37 @@
 
 /* Beautiful modern custom scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(156, 163, 175, 0.25);
+  background: rgba(156, 163, 175, 0.5);
   border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(156, 163, 175, 0.45);
+  background: rgba(156, 163, 175, 0.8);
+  background-clip: content-box;
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.25);
+  background-clip: content-box;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.4);
+  background-clip: content-box;
 }
 

@@ -593,8 +593,15 @@ export default function App() {
           </header>
 
           {/* Render Active tab content */}
-          <main className="flex-1 p-6 md:p-8 overflow-y-auto">
-            {renderTabContent()}
+          <main className="flex-1 p-6 md:p-8 overflow-y-auto flex flex-col justify-between">
+            <div className="flex-1">
+              {renderTabContent()}
+            </div>
+            
+            <footer className="mt-8 pt-4 border-t border-slate-200 dark:border-slate-800/80 text-center text-xs font-bold text-slate-500 tracking-widest flex items-center justify-center flex-wrap gap-2">
+              <span>© {new Date().getFullYear()} Auction Sales Management.</span>
+              <span className="text-emerald-500/80">DEVELOPED BY DEEPAK SAHU</span>
+            </footer>
           </main>
         </div>
       </div>
