@@ -34,7 +34,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
 
   const menuItems = [
     { id: 'dashboard' as SidebarTab, label: 'Dashboard', icon: LayoutDashboard, roles: ['Admin', 'Sales', 'Manager'] },
-    { id: 'new-action' as SidebarTab, label: 'Auction Ident', icon: PlusCircle, roles: ['Admin', 'Sales'] },
+    { id: 'new-action' as SidebarTab, label: 'Auction Indent', icon: PlusCircle, roles: ['Admin', 'Sales'] },
     { id: 'pending' as SidebarTab, label: 'Dispatch', icon: Truck, roles: ['Admin', 'Manager'] },
     { id: 'material-receipt' as SidebarTab, label: 'Material Receipt', icon: PackageCheck, roles: ['Admin', 'Manager'] },
     { id: 'accounts-group' as any, label: 'Accounts', icon: Wallet, roles: ['Admin', 'Manager'] },

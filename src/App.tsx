@@ -472,7 +472,7 @@ export default function App() {
         if (user.role === 'Sales') {
           return <div className="p-8 text-center text-slate-500 font-semibold">Access Denied. Managerial clearance required.</div>;
         }
-        return <PaymentConfirmView />;
+        return <PaymentConfirmView onAddToast={(type, title, desc) => addToast(type, title, desc)} />;
       case 'make-payment':
         if (user.role === 'Sales') {
           return <div className="p-8 text-center text-slate-500 font-semibold">Access Denied. Managerial clearance required.</div>;

@@ -480,13 +480,17 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
                           )}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-right">
-                          <button
-                            onClick={() => openUpdate(r)}
-                            className="px-3.5 py-1.5 bg-white dark:bg-slate-800/80 hover:bg-emerald-600 dark:hover:bg-emerald-600 text-slate-700 dark:text-slate-200 hover:text-white dark:hover:text-white text-[11px] font-bold rounded-xl border border-slate-200 dark:border-slate-700 hover:border-emerald-600 shadow-sm hover:shadow-md hover:shadow-emerald-600/20 transition-all flex items-center gap-1.5 ml-auto cursor-pointer group/btn"
-                          >
-                            <PackageCheck className="w-3.5 h-3.5 text-emerald-500 group-hover/btn:text-white transition-colors" />
-                            <span>Confirm Receipt</span>
-                          </button>
+                          {(r.acReceiptMaterial || '').trim() === '' ? (
+                            <button
+                              onClick={() => openUpdate(r)}
+                              className="px-3.5 py-1.5 bg-white dark:bg-slate-800/80 hover:bg-emerald-600 dark:hover:bg-emerald-600 text-slate-700 dark:text-slate-200 hover:text-white dark:hover:text-white text-[11px] font-bold rounded-xl border border-slate-200 dark:border-slate-700 hover:border-emerald-600 shadow-sm hover:shadow-md hover:shadow-emerald-600/20 transition-all flex items-center gap-1.5 ml-auto cursor-pointer group/btn"
+                            >
+                              <PackageCheck className="w-3.5 h-3.5 text-emerald-500 group-hover/btn:text-white transition-colors" />
+                              <span>Confirm Receipt</span>
+                            </button>
+                          ) : (
+                            <span className="text-[10px] font-bold text-slate-400">—</span>
+                          )}
                         </td>
                       </tr>
                     ))

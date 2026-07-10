@@ -747,6 +747,21 @@ export interface DispatchRecord {
   creditNoteTimeDelay1?: string;   // AG Time Delay1
   uploadCreditNotePPPL?: string;   // AH Uplaod Credit Note issued By PPPL
   creditNoteMailCustomer?: string; // AI Creadint Not Mail To Customer
+  // Payment Confirmation (columns AJ-AO)
+  piPaymentConfirmation?: string;   // AJ PI Payment Confirmation
+  acPaymentConfirmation?: string;   // AK Ac Payment Confirmation
+  paymentTimeDelay1?: string;       // AL Time Delay1
+  uploadReceivedOfPayment?: string; // AM Upload Recived Of Payment
+  paymentReceivedDate?: string;     // AN Payment Recievd Date
+  paymentRemark?: string;           // AO Remark
+  
+  // Make Payment To Vender (columns AR-AW)
+  piMakePayment?: string;           // AR PI Make Payment
+  acMakePayment?: string;           // AS Ac Make Payment
+  makePaymentTimeDelay1?: string;   // AT Time Delay1
+  uploadInvoiceEwayBill?: string;   // AU Uplaod Invoice /E-way Bill
+  transportBill?: string;           // AV Tranport Bill
+  makePaymentRemark?: string;       // AW Remark
 }
 
 const makeDispatchId = (allocationId: string): string => {
@@ -804,26 +819,39 @@ export async function getDispatchRows(): Promise<{ success: boolean; data: Dispa
         rupeesPerLtr: str(row[12]),
         dispatchRemark: str(row[13]),      // N  Remark
         // O (row[14]) = "PI Dispatch Staus" — not a form field, skipped.
-        acDispatchStatus: str(row[15]),    // P  AC Dispatch Status
+        acDispatchStatus: formatToDDMMYYYY(row[15]), // P  AC Dispatch Status
         statusTimeDelay1: str(row[16]),    // Q  Time Delay1
         dispatchStatus: str(row[17]),      // R  Dispatch Status
         statusDispatchQty: str(row[18]),   // S  Dispatch QTY
         statusDispatchDate: formatToDDMMYYYY(row[19]), // T  Dispatch Date
         invoiceVendor: str(row[20]),       // U  Upload Invoice Recievd From Vender
         taxInvoiceWayBill: str(row[21]),   // V  Uplaod Tax Invoice With way Bill
-        plReceiptMaterial: str(row[22]),      // W  PL Reciept Material
-        acReceiptMaterial: str(row[23]),      // X  AC Reciept Material
+        plReceiptMaterial: formatToDDMMYYYY(row[22]), // W  PL Reciept Material
+        acReceiptMaterial: formatToDDMMYYYY(row[23]), // X  AC Reciept Material
         receiptTimeDelay2: str(row[24]),      // Y  Time Delay2
         uploadReceiving: str(row[25]),        // Z  Uplaod Recieving
         shortageQty: str(row[26]),            // AA Shortage Qty (If Any)
         creditNoteRequested: str(row[27]),    // AB Credit Note Requested by Party (If Any)
         invoiceReviewDecision: str(row[28]),  // AC Invoice Review & Credit Note Decision
         uploadVendorCreditNote: str(row[29]), // AD Upload Vendor Credit Note
-        plCreditNote: str(row[30]),           // AE PI Credit Note
-        acCreditNote: str(row[31]),           // AF Ac Credit Note
+        plCreditNote: formatToDDMMYYYY(row[30]),      // AE PI Credit Note
+        acCreditNote: formatToDDMMYYYY(row[31]),      // AF Ac Credit Note
         creditNoteTimeDelay1: str(row[32]),   // AG Time Delay1
         uploadCreditNotePPPL: str(row[33]),   // AH Uplaod Credit Note issued By PPPL
-        creditNoteMailCustomer: str(row[34])  // AI Creadint Not Mail To Customer
+        creditNoteMailCustomer: str(row[34]), // AI Creadint Not Mail To Customer
+        piPaymentConfirmation: formatToDDMMYYYY(row[35]), // AJ PI Payment Confirmation
+        acPaymentConfirmation: formatToDDMMYYYY(row[36]), // AK Ac Payment Confirmation
+        paymentTimeDelay1: str(row[37]),          // AL Time Delay1
+        uploadReceivedOfPayment: str(row[38]),    // AM Upload Recived Of Payment
+        paymentReceivedDate: formatToDDMMYYYY(row[39]), // AN Payment Recievd Date
+        paymentRemark: str(row[40]),              // AO Remark
+        // AP (row[41]), AQ (row[42]) are not shown in user request as used.
+        piMakePayment: formatToDDMMYYYY(row[43]), // AR PI Make Payment
+        acMakePayment: formatToDDMMYYYY(row[44]), // AS Ac Make Payment
+        makePaymentTimeDelay1: str(row[45]),      // AT Time Delay1
+        uploadInvoiceEwayBill: str(row[46]),      // AU Uplaod Invoice /E-way Bill
+        transportBill: str(row[47]),              // AV Tranport Bill
+        makePaymentRemark: str(row[48])           // AW Remark
       });
     }
     return { success: true, data: rows };
@@ -978,5 +1006,65 @@ export async function updateCreditNoteInSheet(
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || 'Network error updating credit note' };
+  }
+}
+
+// Update the Payment Confirmation fields (columns AK, AM, AN, AO). Column AJ
+// ("PI Payment Confirmation") is the trigger and AL ("Time Delay1") is left
+// untouched (hidden / not stored).
+export async function updatePaymentConfirmationInSheet(
+  rowIndex: number,
+  fields: {
+    acPaymentConfirmation: string;
+    uploadReceivedOfPayment: string;
+    paymentReceivedDate: string;
+    paymentRemark: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Columns are 1-indexed.
+    const writes: Array<[number, any]> = [
+      [37, fields.acPaymentConfirmation],    // AK Ac Payment Confirmation (auto date)
+      [39, fields.uploadReceivedOfPayment],  // AM Upload Recived Of Payment
+      [40, fields.paymentReceivedDate],      // AN Payment Recievd Date
+      [41, fields.paymentRemark]             // AO Remark
+    ];
+    for (const [col, val] of writes) {
+      const r = await updateCellValue(DISPATCH_SHEET, rowIndex, col, val);
+      if (!r.success) return { success: false, error: r.error || 'Failed to update payment confirmation' };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error updating payment confirmation' };
+  }
+}
+
+// Update the Make Payment To Vendor fields (columns AS-AW). Column AR
+// ("PI Make Payment") is the trigger. Time Delay1 (AT) is hidden.
+export async function updateMakePaymentInSheet(
+  rowIndex: number,
+  fields: {
+    acMakePayment: string;
+    uploadInvoiceEwayBill: string;
+    transportBill: string;
+    makePaymentRemark: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Columns are 1-indexed.
+    // AS = 45, AT = 46, AU = 47, AV = 48, AW = 49
+    const writes: Array<[number, any]> = [
+      [45, fields.acMakePayment],         // AS Ac Make Payment (auto date)
+      [47, fields.uploadInvoiceEwayBill], // AU Uplaod Invoice /E-way Bill
+      [48, fields.transportBill],         // AV Tranport Bill
+      [49, fields.makePaymentRemark]      // AW Remark
+    ];
+    for (const [col, val] of writes) {
+      const r = await updateCellValue(DISPATCH_SHEET, rowIndex, col, val);
+      if (!r.success) return { success: false, error: r.error || 'Failed to update make payment' };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error updating make payment' };
   }
 }
