@@ -365,11 +365,20 @@ export default function HistoryView({
                   </td>
                 </tr>
               ) : (
-                paginated.map((action) => (
-                  <tr key={action.id + '-' + action.rowIndex} className="hover:bg-slate-50/40 dark:hover:bg-slate-900/10 transition-colors">
+                paginated.map((action) => {
+                  const isSale = action.areWeL1 === 'No';
+                  return (
+                  <tr key={action.id + '-' + action.rowIndex} className={`transition-colors ${isSale ? 'bg-purple-50/40 hover:bg-purple-50/60 dark:bg-purple-900/20 dark:hover:bg-purple-900/40' : 'hover:bg-slate-50/40 dark:hover:bg-slate-900/10'}`}>
                     <td className="py-4.5 px-6 whitespace-nowrap text-slate-900 dark:text-white font-bold">{action.timestamp}</td>
                     <td className="py-4.5 px-6 whitespace-nowrap font-mono text-xs font-bold text-slate-600 dark:text-slate-400">{action.id}</td>
-                    <td className="py-4.5 px-6 whitespace-nowrap text-slate-900 dark:text-white font-extrabold">{action.companyName}</td>
+                    <td className="py-4.5 px-6 whitespace-nowrap text-slate-900 dark:text-white font-extrabold flex items-center gap-1.5 h-[53px]">
+                      {action.companyName}
+                      {isSale && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800 bg-purple-100 dark:bg-purple-900/40 text-[8px] font-black uppercase tracking-widest text-purple-700 dark:text-purple-300">
+                          Sale
+                        </span>
+                      )}
+                    </td>
                     <td className="py-4.5 px-6 whitespace-nowrap text-right font-extrabold text-slate-900 dark:text-white">{(action.quntity || 0).toLocaleString()}</td>
                     <td className="py-4.5 px-6 whitespace-nowrap text-center text-slate-500 dark:text-slate-400">{action.unit}</td>
                     <td className="py-4.5 px-6 whitespace-nowrap text-slate-500 dark:text-slate-400 font-semibold">{action.productName}</td>
@@ -435,8 +444,9 @@ export default function HistoryView({
                       </td>
                     )}
                   </tr>
-                ))
-              )}
+                );
+              })
+            )}
             </tbody>
           </table>
         </div>

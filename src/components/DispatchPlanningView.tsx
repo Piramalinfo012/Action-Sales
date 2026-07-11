@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import {
   getPurchaseAllocationRows,
+  getSaleAllocationRows,
   getDispatchRows,
   saveDispatchRecord,
   getMaterialSourcesFromMaster,
@@ -144,8 +145,8 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
     try {
       // Candidates come from Purchase Allocation; saved dispatch data lives in the
       // 'Dispatch' sheet. Merge the two by Allocation ID.
-      const [allocRes, dispRes] = await Promise.all([getPurchaseAllocationRows(), getDispatchRows()]);
-      if (allocRes.success) {
+      const [allocRes, saleRes, dispRes] = await Promise.all([getPurchaseAllocationRows(), getSaleAllocationRows(), getDispatchRows()]);
+      if (allocRes.success || saleRes.success) {
         // Group ALL dispatch records by allocation (an order can be dispatched in parts).
         const byAlloc = new Map<string, DispatchRecord[]>();
         dispRes.data.forEach((d) => {
@@ -155,7 +156,8 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
           byAlloc.get(k)!.push(d);
         });
 
-        const merged: DispatchQueueRow[] = allocRes.data.map((a) => {
+        const allAllocations = [...(allocRes.data || []), ...(saleRes.data || [])];
+        const merged: DispatchQueueRow[] = allAllocations.map((a) => {
           const recs = byAlloc.get((a.allocationId || '').trim().toLowerCase()) || [];
           const dispatchedQty = recs.reduce((s, r) => s + (parseFloat(r.dispatchQuantity) || 0), 0);
           const targetQty = parseFloat(a.purchaseQuantity) || 0;
@@ -185,7 +187,7 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
         setRows(merged);
         if (notify) onAddToast('success', 'Refreshed', 'Dispatch planning list synced with sheet.');
       } else {
-        onAddToast('error', 'Load Failed', allocRes.error || 'Could not read Purchase Allocation sheet.');
+        onAddToast('error', 'Load Failed', allocRes.error || saleRes.error || 'Could not read Allocation sheets.');
       }
     } catch (err: any) {
       if (!silent) onAddToast('error', 'Network Error', err.message || 'Failed to load dispatch data.');
@@ -233,7 +235,7 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
     materialSuppliedFrom: row.lastMaterial || '',
     transportation: row.lastTransportation || '',
     // Rupies/ltr only applies to Own Transport(PPPL); don't carry it otherwise.
-    rupeesPerLtr: row.lastTransportation === 'Own Transport(PPPL)' ? (row.lastRupees || '') : '',
+    rupeesPerLtr: (row.isSale ? row.lastTransportation === 'Vender Transport' : row.lastTransportation === 'Own Transport(PPPL)') ? (row.lastRupees || '') : '',
     dispatchRemark: ''
   });
 
@@ -251,7 +253,7 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
       acDispatch: todayDDMMYYYY(),
       deliveryDateTime: datetimeLocalToDDMM(fields.deliveryDateTime),
       // Rupies/ltr is only valid for Own Transport(PPPL) — never store it otherwise.
-      rupeesPerLtr: fields.transportation === 'Own Transport(PPPL)' ? fields.rupeesPerLtr : ''
+      rupeesPerLtr: (editingRow.isSale ? fields.transportation === 'Vender Transport' : fields.transportation === 'Own Transport(PPPL)') ? fields.rupeesPerLtr : ''
     };
     const res = await saveDispatchRecord(editingRow, payload);
     setIsSaving(false);
@@ -455,7 +457,7 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
 <table className="min-w-full divide-y divide-slate-100 dark:divide-slate-800 responsive-mobile-table">
                 <thead className="bg-gradient-to-b from-slate-50 to-slate-100/40 dark:from-slate-900/70 dark:to-slate-900/40">
                   <tr>
-                    {['Company & Product', 'Supplier', 'Purchase Qty', 'Delivery', 'Status', 'Dispatch'].map((h, i) => (
+                    {['Company & Product', 'Supplier / L1 Party', 'Qty', 'Delivery', 'Status', 'Dispatch'].map((h, i) => (
                       <th
                         key={h}
                         className={`px-4 py-3.5 text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest ${i === 5 ? 'text-right' : 'text-left'}`}
@@ -490,7 +492,7 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
                     </tr>
                   ) : (
                     filtered.map((r) => (
-                      <tr key={r.rowIndex} className="group hover:bg-indigo-50/40 dark:hover:bg-slate-800/30 transition-colors">
+                      <tr key={r.rowIndex} className={`group transition-colors ${r.isSale ? "bg-amber-50/20 hover:bg-amber-100/40 dark:bg-amber-900/10 dark:hover:bg-amber-900/20" : "hover:bg-indigo-50/40 dark:hover:bg-slate-800/30"}`}>
                         {/* Company / Product */}
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-2.5 max-w-xs">
@@ -510,7 +512,12 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
                         </td>
                         {/* Supplier */}
                         <td className="px-4 py-4 whitespace-nowrap">
-                          <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">{r.supplierName || '—'}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">{r.supplierName || '—'}</div>
+                            {r.isSale && (
+                              <span className="text-[9px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full uppercase tracking-wider">Sale</span>
+                            )}
+                          </div>
                           <div className="text-[10px] text-slate-400 font-mono">{r.allocationId}</div>
                         </td>
                         {/* Purchase Qty + dispatch progress */}
@@ -655,7 +662,7 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Quantity (this dispatch) */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                  <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
                     Dispatch Quantity {editingRow.targetQty > 0 && <span className="text-amber-500 normal-case">(pending {editingRow.pendingQty.toLocaleString()})</span>}
                   </label>
                   <div className="relative">
@@ -665,46 +672,46 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
                       value={fields.dispatchQuantity}
                       onChange={(e) => setFields({ ...fields, dispatchQuantity: e.target.value })}
                       placeholder="e.g. 4500"
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all"
                     />
                   </div>
                 </div>
 
                 {/* Delivery Date Time */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Delievrt Date Time</label>
+                  <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Delievrt Date Time</label>
                   <div className="relative">
                     <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                     <input
                       type="datetime-local"
                       value={fields.deliveryDateTime}
                       onChange={(e) => setFields({ ...fields, deliveryDateTime: e.target.value })}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all"
                     />
                   </div>
                 </div>
 
                 {/* Rate-Profiled */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Rate-Prifiled</label>
+                  <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Rate-Prifiled</label>
                   <input
                     type="text"
                     value={fields.rateProfiled}
                     onChange={(e) => setFields({ ...fields, rateProfiled: e.target.value })}
                     placeholder="e.g. 92.50"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all"
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all"
                   />
                 </div>
 
                 {/* Material To Be supplied From — dropdown from Master sheet (A2:A) */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Matreial To Be supplied From</label>
+                  <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Matreial To Be supplied From</label>
                   <div className="relative">
                     <Package className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
                     <select
                       value={fields.materialSuppliedFrom}
                       onChange={(e) => setFields({ ...fields, materialSuppliedFrom: e.target.value })}
-                      className="w-full pl-10 pr-8 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all appearance-none cursor-pointer"
+                      className="w-full pl-10 pr-8 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all appearance-none cursor-pointer"
                     >
                       <option value="">Select source…</option>
                       {/* Keep a previously-saved value even if it's no longer in the Master list */}
@@ -721,7 +728,7 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
 
                 {/* Transportation — dropdown */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Transportation</label>
+                  <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Transportation</label>
                   <div className="relative">
                     <Truck className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
                     <select
@@ -732,10 +739,10 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
                         setFields((prev) => ({
                           ...prev,
                           transportation: t,
-                          rupeesPerLtr: t === 'Own Transport(PPPL)' ? prev.rupeesPerLtr : ''
+                          rupeesPerLtr: (editingRow.isSale ? t === 'Vender Transport' : t === 'Own Transport(PPPL)') ? prev.rupeesPerLtr : ''
                         }));
                       }}
-                      className="w-full pl-10 pr-8 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all appearance-none cursor-pointer"
+                      className="w-full pl-10 pr-8 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all appearance-none cursor-pointer"
                     >
                       <option value="">Select transport…</option>
                       <option value="Own Transport(PPPL)">Own Transport(PPPL)</option>
@@ -752,7 +759,7 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
               </div>
 
               {/* Rupies / ltr — only for Own Transport(PPPL); preset dropdown + free input */}
-              {fields.transportation === 'Own Transport(PPPL)' && (
+              {(editingRow.isSale ? fields.transportation === 'Vender Transport' : fields.transportation === 'Own Transport(PPPL)') && (
                 <div className="space-y-1.5 bg-indigo-500/5 border border-indigo-500/15 rounded-2xl p-3.5">
                   <label className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider block">Rupies / ltr</label>
                   <div className="relative">
@@ -794,13 +801,13 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
 
               {/* Remark */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Remark</label>
+                <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Remark</label>
                 <textarea
                   rows={2}
                   value={fields.dispatchRemark}
                   onChange={(e) => setFields({ ...fields, dispatchRemark: e.target.value })}
                   placeholder="Any dispatch notes..."
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all resize-none"
+                  className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all resize-none"
                 />
               </div>
 

@@ -47,7 +47,14 @@ interface NewActionViewProps {
     uploadPoCopy?: string,
     paymentTerms?: string,
     shortageCondition?: string,
-    suppliers?: Supplier[]
+    suppliers?: Supplier[],
+    l1PartyName?: string,
+    l1PartyPurchase?: string,
+    saleQuantity?: string,
+    saleRate?: string,
+    saleUploadSoCopy?: string,
+    salePaymentTerms?: string,
+    saleShortageCondition?: string
   ) => Promise<boolean>;
 }
 
@@ -120,6 +127,20 @@ export default function NewActionView({
   // Purchase Allocation states
   const [l1WillPurchase, setL1WillPurchase] = useState('No');
   const [l1TimeDelay2, setL1TimeDelay2] = useState('0 days');
+
+  // Sale Allocation states
+  const [l1PartyName, setL1PartyName] = useState('');
+  const [l1PartyPurchase, setL1PartyPurchase] = useState('No');
+  const [saleQuantity, setSaleQuantity] = useState('');
+  const [saleRate, setSaleRate] = useState('');
+  const [saleUploadSoCopy, setSaleUploadSoCopy] = useState('');
+  const [saleIsUploading, setSaleIsUploading] = useState(false);
+  const [saleUploadProgress, setSaleUploadProgress] = useState(0);
+  const [saleSoFileName, setSaleSoFileName] = useState('');
+  const [saleSoFileSize, setSaleSoFileSize] = useState('');
+  const [saleDragging, setSaleDragging] = useState(false);
+  const [salePaymentTerms, setSalePaymentTerms] = useState('');
+  const [saleShortageCondition, setSaleShortageCondition] = useState('');
 
   // Multi-supplier allocation: an order can be split across several suppliers
   // (e.g. 300 = 100 + 100 + 100). Each supplier holds its own PO copy & terms.
@@ -221,7 +242,102 @@ export default function NewActionView({
   // Fetch product list dynamically from Master sheet B2:B on mount
   useEffect(() => {
     let active = true;
-    const loadProducts = async () => {
+    
+const handleSaleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setSaleDragging(true);
+  };
+  const handleSaleDragLeave = () => setSaleDragging(false);
+  const handleSaleFileDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setSaleDragging(false);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) processSaleFile(files[0]);
+  };
+  const handleSaleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) processSaleFile(files[0]);
+  };
+
+  const processSaleFile = (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      alert("File size exceeds 5MB limit. Please upload a smaller file.");
+      return;
+    }
+
+    setSaleIsUploading(true);
+    setSaleUploadProgress(10);
+
+    const interval = setInterval(() => {
+      setSaleUploadProgress(prev => Math.min(90, prev + 15));
+    }, 150);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const formattedSize = file.size > 1024 * 1024
+        ? `${(file.size / (1024 * 1024)).toFixed(2)} MB`
+        : `${(file.size / 1024).toFixed(1)} KB`;
+
+      const fallbackUrl = `https://drive.google.com/drive/folders/1HBi8BusMyDY_lQ1b7iJEJQvcuqayThu_`;
+
+      try {
+        const dataUrl = event.target?.result as string;
+        const base64Content = dataUrl.split(',')[1];
+
+        const uploadBody = new URLSearchParams();
+        uploadBody.append('action', 'uploadFile');
+        uploadBody.append('folderId', '1HBi8BusMyDY_lQ1b7iJEJQvcuqayThu_');
+        uploadBody.append('fileName', file.name);
+        uploadBody.append('base64Data', base64Content);
+        uploadBody.append('mimeType', file.type || 'application/octet-stream');
+
+        const response = await fetch(API_URL, { method: 'POST', body: uploadBody });
+
+        clearInterval(interval);
+        const resData = await response.json();
+
+        const findUrlInObject = (obj: any): string | null => {
+          if (typeof obj === 'string' && (obj.startsWith('http://') || obj.startsWith('https://'))) return obj;
+          if (obj && typeof obj === 'object') {
+            for (const key of Object.keys(obj)) {
+              const found = findUrlInObject(obj[key]);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+
+        const driveUrl = findUrlInObject(resData);
+
+        if (resData.success && driveUrl) {
+          setSaleUploadSoCopy(driveUrl);
+          setSaleSoFileName(file.name);
+          setSaleSoFileSize(formattedSize);
+          setSaleIsUploading(false);
+          setSaleUploadProgress(100);
+        } else {
+          const errorMsg = resData.error || "Unknown error";
+          alert(`Google Drive upload failed: ${errorMsg}. Falling back to your shared folder link.`);
+          setSaleUploadSoCopy(fallbackUrl);
+          setSaleSoFileName(file.name);
+          setSaleSoFileSize(formattedSize);
+          setSaleIsUploading(false);
+          setSaleUploadProgress(100);
+        }
+      } catch (err: any) {
+        clearInterval(interval);
+        alert(`Network error uploading to Google Drive: ${err.message}. Falling back to your shared folder link.`);
+        setSaleUploadSoCopy(fallbackUrl);
+        setSaleSoFileName(file.name);
+        setSaleSoFileSize(formattedSize);
+        setSaleIsUploading(false);
+        setSaleUploadProgress(100);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const loadProducts = async () => {
       const res = await getProductsFromMasterSheet();
       if (res.success && res.data && active) {
         setProducts(res.data);
@@ -241,7 +357,102 @@ export default function NewActionView({
   const locations = ['RPR', 'Mumbai', 'Delhi', 'Bengaluru', 'Chennai', 'Kolkata', 'Pune'];
 
   // Unit presets
-  const units = ['Ltr', 'Kg', 'M3', 'Brl', 'Pcs'];
+  const units = ['Ltr', 'Kg', 'M3', 'Brl', 'Pcs', 'KL'];
+
+
+  const handleSaleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setSaleDragging(true);
+  };
+  const handleSaleDragLeave = () => setSaleDragging(false);
+  const handleSaleFileDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setSaleDragging(false);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) processSaleFile(files[0]);
+  };
+  const handleSaleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) processSaleFile(files[0]);
+  };
+
+  const processSaleFile = (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      alert("File size exceeds 5MB limit. Please upload a smaller file.");
+      return;
+    }
+
+    setSaleIsUploading(true);
+    setSaleUploadProgress(10);
+
+    const interval = setInterval(() => {
+      setSaleUploadProgress(prev => Math.min(90, prev + 15));
+    }, 150);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const formattedSize = file.size > 1024 * 1024
+        ? `${(file.size / (1024 * 1024)).toFixed(2)} MB`
+        : `${(file.size / 1024).toFixed(1)} KB`;
+
+      const fallbackUrl = `https://drive.google.com/drive/folders/1HBi8BusMyDY_lQ1b7iJEJQvcuqayThu_`;
+
+      try {
+        const dataUrl = event.target?.result as string;
+        const base64Content = dataUrl.split(',')[1];
+
+        const uploadBody = new URLSearchParams();
+        uploadBody.append('action', 'uploadFile');
+        uploadBody.append('folderId', '1HBi8BusMyDY_lQ1b7iJEJQvcuqayThu_');
+        uploadBody.append('fileName', file.name);
+        uploadBody.append('base64Data', base64Content);
+        uploadBody.append('mimeType', file.type || 'application/octet-stream');
+
+        const response = await fetch(API_URL, { method: 'POST', body: uploadBody });
+
+        clearInterval(interval);
+        const resData = await response.json();
+
+        const findUrlInObject = (obj: any): string | null => {
+          if (typeof obj === 'string' && (obj.startsWith('http://') || obj.startsWith('https://'))) return obj;
+          if (obj && typeof obj === 'object') {
+            for (const key of Object.keys(obj)) {
+              const found = findUrlInObject(obj[key]);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+
+        const driveUrl = findUrlInObject(resData);
+
+        if (resData.success && driveUrl) {
+          setSaleUploadSoCopy(driveUrl);
+          setSaleSoFileName(file.name);
+          setSaleSoFileSize(formattedSize);
+          setSaleIsUploading(false);
+          setSaleUploadProgress(100);
+        } else {
+          const errorMsg = resData.error || "Unknown error";
+          alert(`Google Drive upload failed: ${errorMsg}. Falling back to your shared folder link.`);
+          setSaleUploadSoCopy(fallbackUrl);
+          setSaleSoFileName(file.name);
+          setSaleSoFileSize(formattedSize);
+          setSaleIsUploading(false);
+          setSaleUploadProgress(100);
+        }
+      } catch (err: any) {
+        clearInterval(interval);
+        alert(`Network error uploading to Google Drive: ${err.message}. Falling back to your shared folder link.`);
+        setSaleUploadSoCopy(fallbackUrl);
+        setSaleSoFileName(file.name);
+        setSaleSoFileSize(formattedSize);
+        setSaleIsUploading(false);
+        setSaleUploadProgress(100);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -449,6 +660,18 @@ export default function NewActionView({
     setL1AreWeL1(entry.areWeL1 || 'Yes');
     setL1WillPurchase(entry.willPurchase || 'No');
     setL1TimeDelay2(entry.timeDelay2 || '0 days');
+    setL1PartyName('');
+    setL1PartyPurchase('No');
+    setSaleQuantity('');
+    setSaleRate('');
+    setSaleUploadSoCopy('');
+    setSaleIsUploading(false);
+    setSaleUploadProgress(0);
+    setSaleSoFileName('');
+    setSaleSoFileSize('');
+    setSaleDragging(false);
+    setSalePaymentTerms('');
+    setSaleShortageCondition('');
 
     // Reconstruct the supplier list from the newline-joined sheet columns.
     const splitField = (v?: string) => (v ? String(v).split('\n') : []);
@@ -610,7 +833,14 @@ export default function NewActionView({
       finalUploadPoCopy,
       finalPaymentTerms,
       finalShortageCondition,
-      activeSuppliers
+      activeSuppliers,
+      l1PartyName,
+      l1PartyPurchase,
+      saleQuantity,
+      saleRate,
+      saleUploadSoCopy,
+      salePaymentTerms,
+      saleShortageCondition
     );
     setIsL1Saving(false);
     if (success) {
@@ -729,7 +959,7 @@ export default function NewActionView({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Timestamp (Date Selector) */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                  <label className="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
                     Transaction Date
                   </label>
                   <div className="relative">
@@ -738,7 +968,7 @@ export default function NewActionView({
                       type="date"
                       value={date}
                       onChange={(e) => setDate(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all"
+                      className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all"
                       required
                     />
                   </div>
@@ -746,7 +976,7 @@ export default function NewActionView({
 
                 {/* ID */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block flex justify-between items-center">
+                  <label className="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1 flex justify-between items-center">
                     <span>Transaction ID</span>
                     <button
                       type="button"
@@ -763,7 +993,7 @@ export default function NewActionView({
                       placeholder="e.g. IND/0"
                       value={txnId}
                       onChange={(e) => setTxnId(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all font-mono"
+                      className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all font-mono"
                       required
                     />
                   </div>
@@ -771,7 +1001,7 @@ export default function NewActionView({
 
                 {/* Company Name */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                  <label className="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
                     Company Name
                   </label>
                   <div className="relative">
@@ -781,7 +1011,7 @@ export default function NewActionView({
                       placeholder="e.g. demo"
                       value={companyName}
                       onChange={(e) => setCompanyName(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all"
+                      className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all"
                       required
                     />
                   </div>
@@ -789,7 +1019,7 @@ export default function NewActionView({
 
                 {/* Quantity */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                  <label className="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
                     Quantity (Quntity)
                   </label>
                   <div className="relative">
@@ -799,7 +1029,7 @@ export default function NewActionView({
                       placeholder="e.g. 150000"
                       value={quntity}
                       onChange={(e) => setQuntity(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all"
+                      className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all"
                       min="0.0001"
                       step="any"
                       required
@@ -809,7 +1039,7 @@ export default function NewActionView({
 
                 {/* Unit */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                  <label className="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
                     Unit
                   </label>
                   <div className="relative">
@@ -817,7 +1047,7 @@ export default function NewActionView({
                     <select
                       value={unit}
                       onChange={(e) => setUnit(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all appearance-none text-left"
+                      className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all appearance-none text-left"
                     >
                       {units.map((u) => (
                         <option key={u} value={u}>
@@ -830,7 +1060,7 @@ export default function NewActionView({
 
                 {/* Product Name */}
                 <div className="space-y-1.5 relative" ref={dropdownRef}>
-                  <label className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                  <label className="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
                     Product Name
                   </label>
                   <div className="relative">
@@ -844,7 +1074,7 @@ export default function NewActionView({
                         setShowProductDropdown(true);
                       }}
                       onFocus={() => setShowProductDropdown(true)}
-                      className="w-full pl-10 pr-10 py-2 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all"
+                      className="w-full pl-10 pr-10 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all"
                       required
                     />
                     <button
@@ -895,7 +1125,7 @@ export default function NewActionView({
 
                 {/* Location */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                  <label className="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
                     Location
                   </label>
                   <div className="relative">
@@ -905,7 +1135,7 @@ export default function NewActionView({
                       placeholder="e.g. RPR"
                       value={location}
                       onChange={(e) => setLocation(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all"
+                      className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all"
                       required
                     />
                   </div>
@@ -913,7 +1143,7 @@ export default function NewActionView({
 
                 {/* Remark */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                  <label className="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
                     Remark
                   </label>
                   <div className="relative">
@@ -923,7 +1153,7 @@ export default function NewActionView({
                       placeholder="e.g. DEMO"
                       value={remark}
                       onChange={(e) => setRemark(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all"
+                      className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all"
                     />
                   </div>
                 </div>
@@ -1168,6 +1398,14 @@ export default function NewActionView({
                                 }
                               })()}
 
+                              {/* Show L1 Party Name if Sale Allocation */}
+                              {action.areWeL1 === 'No' && action.l1PartyName && (
+                                <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 shadow-sm">
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-white bg-purple-500 rounded px-1.5 py-0.5">Sale</span>
+                                  <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300">{action.l1PartyName}</span>
+                                </div>
+                              )}
+
                               {/* View all supplier allocation details (from Purchase Allocation sheet) */}
                               {((action.uploadPoCopy && action.uploadPoCopy.trim().length > 0) ||
                                 (action.willPurchase && action.willPurchase.toLowerCase() === 'yes') ||
@@ -1329,7 +1567,7 @@ export default function NewActionView({
 
                 {/* Are We L1? */}
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                  <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
                     Are We L1?
                   </label>
                   <div className="grid grid-cols-2 gap-3">
@@ -1367,7 +1605,7 @@ export default function NewActionView({
                     animate={{ opacity: 1, y: 0 }}
                     className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800/80"
                   >
-                    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                    <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
                       Will We Purchase Material from Another Party?
                     </label>
                     <div className="grid grid-cols-2 gap-3">
@@ -1396,6 +1634,229 @@ export default function NewActionView({
                         <span>No</span>
                       </button>
                     </div>
+                  </motion.div>
+                )}
+
+                
+                {/* When Are We L1? is No -> Sale Allocation Fields */}
+                {l1AreWeL1 === 'No' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800/80"
+                  >
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
+                        L1 Party Name
+                      </label>
+                      <input
+                        type="text"
+                        value={l1PartyName}
+                        onChange={(e) => setL1PartyName(e.target.value)}
+                        placeholder="Enter L1 Party Name"
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-semibold"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
+                        Will the L1 Party Purchase Material from Us?
+                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setL1PartyPurchase('Yes')}
+                          className={`py-2.5 px-4 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                            l1PartyPurchase === 'Yes'
+                              ? 'bg-blue-500/15 border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-500/80'
+                              : 'bg-transparent border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400'
+                          }`}
+                        >
+                          <CheckCircle2 className="w-4 h-4 shrink-0" />
+                          <span>Yes</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setL1PartyPurchase('No')}
+                          className={`py-2.5 px-4 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                            l1PartyPurchase === 'No'
+                              ? 'bg-slate-500/15 border-slate-500 text-slate-600 dark:text-slate-400 dark:border-slate-500/80'
+                              : 'bg-transparent border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400'
+                          }`}
+                        >
+                          <XCircle className="w-4 h-4 shrink-0" />
+                          <span>No</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {l1PartyPurchase === 'Yes' && (
+                      <div className="bg-blue-50/50 dark:bg-slate-800/40 p-4 rounded-xl border border-blue-100 dark:border-slate-700/50 space-y-3">
+                        <h4 className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-3">
+                          Sale Allocation Details
+                        </h4>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
+                              Sales Quantity
+                            </label>
+                            <input
+                              type="number"
+                              step="any"
+                              value={saleQuantity}
+                              onChange={(e) => setSaleQuantity(e.target.value)}
+                              placeholder="Qty"
+                              className="w-full px-3 py-2 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-semibold"
+                            />
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
+                              Sale Material Sale Rate
+                            </label>
+                            <input
+                              type="number"
+                              step="any"
+                              value={saleRate}
+                              onChange={(e) => setSaleRate(e.target.value)}
+                              placeholder="Rate"
+                              className="w-full px-3 py-2 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-semibold"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
+                            Upload SO Copy
+                          </label>
+                          <div className="space-y-2">
+                            {/* Drag & Drop Zone */}
+                            {!saleUploadSoCopy && !saleIsUploading && (
+                              <div
+                                onDragOver={handleSaleDragOver}
+                                onDragLeave={handleSaleDragLeave}
+                                onDrop={handleSaleFileDrop}
+                                className={`border border-dashed rounded-xl p-4 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-1.5 ${
+                                  saleDragging
+                                    ? 'border-blue-500 bg-blue-50/20 dark:bg-blue-950/10'
+                                    : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-950/20'
+                                }`}
+                                onClick={() => document.getElementById('sale-so-file-input')?.click()}
+                              >
+                                <input
+                                  id="sale-so-file-input"
+                                  type="file"
+                                  className="hidden"
+                                  onChange={handleSaleFileChange}
+                                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx"
+                                />
+                                <div className="p-1.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-850">
+                                  <FileText className="w-4 h-4 text-slate-400" />
+                                </div>
+                                <div className="space-y-0.5">
+                                  <p className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
+                                    Drag & drop file or <span className="text-blue-500 hover:underline font-bold">browse</span>
+                                  </p>
+                                  <p className="text-[8px] text-slate-400 dark:text-slate-500 font-semibold">
+                                    PDF, JPG, PNG, Excel up to 5MB
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Uploading State */}
+                            {saleIsUploading && (
+                              <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-white dark:bg-slate-900 space-y-2">
+                                <div className="flex items-center justify-between text-[9px]">
+                                  <span className="text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1.5 animate-pulse">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
+                                    Uploading SO Copy...
+                                  </span>
+                                  <span className="text-slate-500 font-bold">{saleUploadProgress || 0}%</span>
+                                </div>
+                                <div className="w-full bg-slate-100 dark:bg-slate-800 h-1 rounded-full overflow-hidden">
+                                  <div
+                                    className="bg-blue-600 h-full rounded-full transition-all duration-150"
+                                    style={{ width: `${saleUploadProgress || 0}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Uploaded File View Card */}
+                            {saleUploadSoCopy && !saleIsUploading && (
+                              <div className="border border-slate-100 dark:border-slate-800/80 rounded-xl p-2.5 bg-slate-50/50 dark:bg-slate-950/40 flex items-center justify-between gap-3 shadow-sm border-l-2 border-l-emerald-500">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className="p-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0">
+                                    <FileText className="w-4 h-4" />
+                                  </div>
+                                  <div className="min-w-0 space-y-0.5">
+                                    <p className="text-[10px] font-bold text-slate-800 dark:text-slate-200 truncate max-w-[130px]">
+                                      {saleSoFileName || 'SO Copy'}
+                                    </p>
+                                    <div className="flex items-center gap-1">
+                                      {saleSoFileSize && <span className="text-[8px] text-slate-400 font-semibold">{saleSoFileSize}</span>}
+                                      <span className="w-0.5 h-0.5 rounded-full bg-slate-300" />
+                                      <span className="text-[8px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5">
+                                        <Check className="w-2.5 h-2.5" /> Ready
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => window.open(saleUploadSoCopy, '_blank')}
+                                    className="px-1.5 py-0.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-[8px] font-bold rounded-md border border-slate-200/60 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer"
+                                  >
+                                    Get
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSaleUploadSoCopy('');
+                                      setSaleSoFileName('');
+                                      setSaleSoFileSize('');
+                                      setSaleUploadProgress(0);
+                                    }}
+                                    className="p-1 rounded-md bg-white dark:bg-slate-900 hover:bg-rose-50 text-rose-600 border border-slate-200/60 dark:border-slate-800 cursor-pointer"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
+                            Sale Payment Terms and Condition
+                          </label>
+                          <input
+                            type="text"
+                            value={salePaymentTerms}
+                            onChange={(e) => setSalePaymentTerms(e.target.value)}
+                            placeholder="Enter payment terms"
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-semibold"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
+                            Sales Shortage Condition
+                          </label>
+                          <input
+                            type="text"
+                            value={saleShortageCondition}
+                            onChange={(e) => setSaleShortageCondition(e.target.value)}
+                            placeholder="Enter shortage condition"
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-semibold"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </motion.div>
                 )}
 
@@ -1480,7 +1941,7 @@ export default function NewActionView({
 
                           {/* Supplier Name */}
                           <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                            <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
                               Supplier Name
                             </label>
                             <input
@@ -1495,7 +1956,7 @@ export default function NewActionView({
                           <div className="grid grid-cols-2 gap-2">
                             {/* Purchase Quantity */}
                             <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                              <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
                                 Purchase Qty
                               </label>
                               <input
@@ -1510,7 +1971,7 @@ export default function NewActionView({
 
                             {/* Purchase Rate */}
                             <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                              <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
                                 Purchase Rate
                               </label>
                               <input
@@ -1526,7 +1987,7 @@ export default function NewActionView({
 
                           {/* Upload Po Copy */}
                           <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                            <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
                               PO Copy (File Upload)
                             </label>
 
@@ -1629,7 +2090,7 @@ export default function NewActionView({
 
                           {/* Payment Terms and Condition */}
                           <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                            <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
                               Payment Terms & Conditions
                             </label>
                             <textarea
@@ -1643,7 +2104,7 @@ export default function NewActionView({
 
                           {/* Shortage Condition */}
                           <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                            <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
                               Shortage Condition
                             </label>
                             <textarea
@@ -1670,7 +2131,7 @@ export default function NewActionView({
 
                       {/* Time Delay 2 (order level) */}
                       <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-slate-800/80">
-                        <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block pt-2">
+                        <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1 pt-2">
                           Time Delay 2
                         </label>
                         <input
@@ -1794,19 +2255,19 @@ export default function NewActionView({
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-0.5">
-                          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Purchase Qty</span>
+                          <span className="text-[9px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Purchase Qty</span>
                           <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{s.purchaseQuantity || '—'}</p>
                         </div>
                         <div className="space-y-0.5">
-                          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Purchase Rate</span>
+                          <span className="text-[9px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Purchase Rate</span>
                           <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{s.purchaseRate || '—'}</p>
                         </div>
                         <div className="space-y-0.5 col-span-2">
-                          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Payment Terms &amp; Conditions</span>
+                          <span className="text-[9px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Payment Terms &amp; Conditions</span>
                           <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{s.paymentTerms || '—'}</p>
                         </div>
                         <div className="space-y-0.5 col-span-2">
-                          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Shortage Condition</span>
+                          <span className="text-[9px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Shortage Condition</span>
                           <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{s.shortageCondition || '—'}</p>
                         </div>
                       </div>

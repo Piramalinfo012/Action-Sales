@@ -26,6 +26,7 @@ export interface ActionEntry {
   uploadPoCopy?: string; // Upload Po Copy
   paymentTerms?: string; // Payment Terms and Condition
   shortageCondition?: string; // Shortage Condition
+  l1PartyName?: string; // L1 Party Name (Sale Allocation)
   rowIndex?: number; // Row index in Google Spreadsheet
   rawRowValues?: any[]; // Keep full row representation to avoid losing other columns on update
 }

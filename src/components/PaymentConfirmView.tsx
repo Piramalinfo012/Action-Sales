@@ -218,9 +218,9 @@ export default function PaymentConfirmView({ onAddToast }: PaymentConfirmViewPro
 
     return (
       <div className="space-y-1.5">
-        <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">{label}</label>
+        <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">{label}</label>
         {!isUploading && !isSuccess ? (
-          <div className="relative border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors group">
+          <div className="relative border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors group">
             <input type="file" onChange={(e) => e.target.files?.[0] && processFile(e.target.files[0], key)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept=".pdf,image/*,.csv,.xlsx,.xls" />
             <FileText className="w-6 h-6 text-slate-300 dark:text-slate-600 mx-auto mb-2 group-hover:text-blue-500 transition-colors" />
             <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Drag &amp; drop or <span className="text-blue-500">browse</span></p>
@@ -344,11 +344,10 @@ export default function PaymentConfirmView({ onAddToast }: PaymentConfirmViewPro
                     key={opt.key}
                     type="button"
                     onClick={() => setViewFilter(opt.key)}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                      active
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${active
                         ? 'bg-white dark:bg-slate-900 shadow-sm text-blue-600 dark:text-blue-400'
                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                    }`}
+                      }`}
                   >
                     <span>{opt.label}</span>
                     <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${active ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-slate-200/70 dark:bg-slate-700/60 text-slate-500 dark:text-slate-400'}`}>
@@ -395,7 +394,7 @@ export default function PaymentConfirmView({ onAddToast }: PaymentConfirmViewPro
           .responsive-mobile-table td:nth-of-type(8)::before { content: "Action"; }
         }
       `}</style>
-<table className="w-full text-left border-collapse min-w-[1000px] responsive-mobile-table">
+          <table className="w-full text-left border-collapse min-w-[1000px] responsive-mobile-table">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
                 <th className="px-4 py-3.5 text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-widest w-48">Company &amp; Product</th>
@@ -423,15 +422,24 @@ export default function PaymentConfirmView({ onAddToast }: PaymentConfirmViewPro
                   </td>
                 </tr>
               ) : (
-                filtered.map((r, i) => (
-                  <tr key={i} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors group">
+                filtered.map((r, i) => {
+                  const isSale = r.allocationId?.includes('/S');
+                  return (
+                  <tr key={i} className={`group transition-colors ${isSale ? 'bg-purple-50/40 hover:bg-purple-50/60 dark:bg-purple-900/20 dark:hover:bg-purple-900/40' : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/30'}`}>
                     <td className="px-4 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 font-bold text-xs shrink-0 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                           {(r.companyName || 'U')[0].toUpperCase()}
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-slate-900 dark:text-white">{r.companyName || '—'}</p>
+                          <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                            {r.companyName || '—'}
+                            {isSale && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800 bg-purple-100 dark:bg-purple-900/40 text-[8px] font-black uppercase tracking-widest text-purple-700 dark:text-purple-300">
+                                Sale
+                              </span>
+                            )}
+                          </div>
                           <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">
                             <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{r.dispatchId || '—'}</span>
                             <span>{r.productName || '—'}</span>
@@ -490,8 +498,9 @@ export default function PaymentConfirmView({ onAddToast }: PaymentConfirmViewPro
                       )}
                     </td>
                   </tr>
-                ))
-              )}
+                );
+                    })
+                  )}
             </tbody>
           </table>
         </div>
@@ -534,26 +543,26 @@ export default function PaymentConfirmView({ onAddToast }: PaymentConfirmViewPro
             <form onSubmit={handleSave} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Payment Recievd Date</label>
+                  <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Payment Recievd Date</label>
                   <div className="relative">
                     <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
                     <input
                       type="date"
                       value={fields.paymentReceivedDate}
                       onChange={(e) => setFields({ ...fields, paymentReceivedDate: e.target.value })}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold transition-all"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Remark</label>
+                  <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Remark</label>
                   <input
                     type="text"
                     value={fields.paymentRemark}
                     onChange={(e) => setFields({ ...fields, paymentRemark: e.target.value })}
                     placeholder="e.g. Full payment received..."
-                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold transition-all"
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold transition-all"
                   />
                 </div>
 

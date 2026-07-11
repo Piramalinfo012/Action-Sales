@@ -192,7 +192,25 @@ export async function getActionsFromSheet(): Promise<{ success: boolean; data?: 
             rawRowValues: row
           } as ActionEntry;
         });
+      
+      // Fetch Sale Allocations to merge L1 Party Name back into entries
+      try {
+        const saleRes = await getSaleAllocationRows();
+        if (saleRes.success && saleRes.data) {
+          const saleMap = new Map();
+          for (const s of saleRes.data) {
+            saleMap.set(s.id, s.supplierName); // For sale, supplierName holds L1 Party Name
+          }
+          for (const entry of entries) {
+            if (entry.areWeL1 === 'No' && saleMap.has(entry.id)) {
+              entry.l1PartyName = saleMap.get(entry.id);
+            }
+          }
+        }
+      } catch(e) { /* ignore */ }
+
       return { success: true, data: entries };
+
     }
     
     if (result.error && result.error.includes("not found")) {
@@ -303,7 +321,14 @@ export async function updateL1ConfirmationInSheet(
   purchaseRate: string = '',
   uploadPoCopy: string = '',
   paymentTerms: string = '',
-  shortageCondition: string = ''
+  shortageCondition: string = '',
+  l1PartyName: string = '',
+  l1PartyPurchase: string = '',
+  saleQuantity: string = '',
+  saleRate: string = '',
+  saleUploadSoCopy: string = '',
+  salePaymentTerms: string = '',
+  saleShortageCondition: string = ''
 ): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
     // FMS stores ONLY the L1 basics. The per-supplier purchase details are stored
@@ -325,6 +350,22 @@ export async function updateL1ConfirmationInSheet(
         return { success: false, error: r.error || 'Failed to update L1 Confirmation' };
       }
     }
+
+    // Write to Sale Allocation if Are We L1? is No
+    if (areWeL1 === 'No') {
+      
+      await syncSaleAllocation(
+        entry,
+        l1PartyName,
+        l1PartyPurchase,
+        saleQuantity,
+        saleRate,
+        saleUploadSoCopy,
+        salePaymentTerms,
+        saleShortageCondition
+      );
+    }
+    
     return { success: true, message: 'L1 Confirmation updated' };
   } catch (err: any) {
     return { success: false, error: err.message || 'Network error updating L1 Confirmation' };
@@ -576,6 +617,91 @@ export async function syncSuppliersToAllocation(
   }
 }
 
+// ============== SALE ALLOCATION SUB-SHEET ==============
+export const SALE_ALLOCATION_SHEET = 'Sale Allocation';
+
+async function fetchSaleAllocationRows(entryId: string): Promise<{ rowIndexes: number[] }> {
+  const empty = { rowIndexes: [] as number[] };
+  try {
+    const response = await fetch(`${API_URL}?sheet=${encodeURIComponent(SALE_ALLOCATION_SHEET)}&t=${Date.now()}`, { cache: 'no-store' });
+    const result = await response.json();
+    if (!result.success || !Array.isArray(result.data)) return empty;
+
+    const data: any[][] = result.data;
+    let headerIdx = -1;
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      if (Array.isArray(row) && row.some(c => typeof c === 'string' && c.toLowerCase().includes('l1 party name'))) {
+        headerIdx = i;
+        break;
+      }
+    }
+    if (headerIdx === -1) return empty;
+
+    const headers = data[headerIdx].map((h: any) => String(h || '').trim().toLowerCase());
+    const idCol = headers.indexOf('id');
+    const rowIndexes: number[] = [];
+    const target = entryId.trim().toLowerCase();
+
+    for (let i = headerIdx + 1; i < data.length; i++) {
+      const row = data[i];
+      if (!Array.isArray(row)) continue;
+      const rowId = idCol >= 0 ? String(row[idCol] ?? '').trim() : '';
+      if (rowId.toLowerCase() === target) {
+        rowIndexes.push(i + 1);
+      }
+    }
+    return { rowIndexes };
+  } catch {
+    return empty;
+  }
+}
+
+export async function syncSaleAllocation(
+  entry: ActionEntry,
+  l1PartyName: string,
+  l1PartyPurchase: string,
+  saleQuantity: string,
+  saleRate: string,
+  saleUploadSoCopy: string,
+  salePaymentTerms: string,
+  saleShortageCondition: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { rowIndexes } = await fetchSaleAllocationRows(entry.id);
+    const descending = [...rowIndexes].sort((a, b) => b - a);
+    for (const r of descending) {
+      await fetch(`${API_URL}?sheetName=${encodeURIComponent(SALE_ALLOCATION_SHEET)}&action=delete&rowIndex=${r}`, { method: 'POST' });
+    }
+
+    const rowData = [
+      entry.timestamp || '',            // A  Timetamp
+      `${entry.id}/S1`,                 // B  Allocation ID
+      entry.id || '',                   // C  ID
+      entry.companyName || '',          // D  Company Name
+      entry.quntity ?? '',              // E  Quntity
+      entry.productName || '',          // F  Product Name
+      entry.location || '',             // G  Location
+      entry.remark || '',               // H  Remark
+      l1PartyName || '',                // I  L1 Party Name
+      l1PartyPurchase || '',            // J  Will the L1 Party Purchase...
+      saleQuantity || '',               // K  Sales Quantity
+      saleRate || '',                   // L  Sale Material Sale Rate
+      saleUploadSoCopy || '',           // M  Upload So Copy
+      salePaymentTerms || '',           // N  Sale Payment Terms and Condition
+      saleShortageCondition || ''       // O  Sales Shortage Condition
+    ];
+
+    const query = `?sheetName=${encodeURIComponent(SALE_ALLOCATION_SHEET)}&action=batchInsert&rowsData=${encodeURIComponent(JSON.stringify([rowData]))}`;
+    const res = await fetch(`${API_URL}${query}`, { method: 'POST' });
+    const j = await res.json();
+    if (j.success) return { success: true };
+    return { success: false, error: j.error || 'Failed to write Sale Allocation row' };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error writing Sale Allocation' };
+  }
+}
+
 // ============== DISPATCH PLANNING (Purchase Allocation columns R-X) ==============
 // Each Purchase Allocation row (one per supplier, created after L1 confirmation)
 // carries the dispatch-planning fields in columns R-X. Dispatch Planning reads all
@@ -592,6 +718,7 @@ export interface AllocationRow {
   supplierName: string;
   purchaseQuantity: string;
   purchaseRate: string;
+  isSale?: boolean;
   // Dispatch planning fields (columns Q-X)
   acDispatch: string;       // Q  AC Dispatch (actual dispatch date)
   dispatchQuantity: string; // R
@@ -615,6 +742,71 @@ export interface DispatchFields {
 }
 
 // Read all Purchase Allocation rows (with dispatch fields) by fixed column position.
+
+export async function getSaleAllocationRows(): Promise<{ success: boolean; data: AllocationRow[]; error?: string }> {
+  try {
+    const response = await fetch(`${API_URL}?sheet=${encodeURIComponent(SALE_ALLOCATION_SHEET)}&t=${Date.now()}`, { cache: 'no-store' });
+    const result = await response.json();
+    if (!result.success || !Array.isArray(result.data)) {
+      return { success: false, data: [], error: result.error || 'Failed to read Sale Allocation' };
+    }
+
+    const data: any[][] = result.data;
+
+    let headerIdx = -1;
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      if (Array.isArray(row) && row.some(c =>
+        typeof c === 'string' &&
+        (c.toLowerCase().includes('l1 party name') || c.toLowerCase().includes('allocation id'))
+      )) {
+        headerIdx = i;
+        break;
+      }
+    }
+    if (headerIdx === -1) return { success: true, data: [] };
+
+    const str = (v: any) => (v === null || v === undefined) ? '' : String(v);
+    const rows: AllocationRow[] = [];
+
+    for (let i = headerIdx + 1; i < data.length; i++) {
+      const row = data[i];
+      if (!Array.isArray(row)) continue;
+      const id = str(row[2]).trim();          // C  ID
+      const supplier = str(row[8]).trim();     // I  L1 Party Name
+      if (!id && !supplier) continue;          // skip blank rows
+
+      rows.push({
+        rowIndex: i + 1,
+        timestamp: str(row[0]),                // A
+        allocationId: str(row[1]),             // B
+        id,                                    // C
+        companyName: str(row[3]),              // D
+        quntity: str(row[4]),                  // E
+        productName: str(row[5]),              // F
+        location: str(row[6]),                 // G
+        // Map Sale fields to Dispatch fields
+        supplierName: supplier,                // I L1 Party Name -> Supplier Name
+        purchaseQuantity: str(row[10]),        // K Sales Quantity -> Purchase Quantity
+        purchaseRate: str(row[11]),            // L Sale Material Sale Rate -> Purchase Rate
+        acDispatch: formatToDDMMYYYY(row[15]), // P (assuming Dispatch data starts after O)
+        dispatchQuantity: str(row[16]),        // Q
+        deliveryDateTime: str(row[17]),        // R
+        rateProfiled: str(row[18]),            // S
+        materialSuppliedFrom: str(row[19]),    // T
+        transportation: str(row[20]),          // U
+        rupeesPerLtr: str(row[21]),            // V
+        dispatchRemark: str(row[22]),          // W
+        isSale: true
+      });
+    }
+
+    return { success: true, data: rows };
+  } catch (err: any) {
+    return { success: false, data: [], error: err.message || 'Network error reading Sale Allocation' };
+  }
+}
+
 export async function getPurchaseAllocationRows(): Promise<{ success: boolean; data: AllocationRow[]; error?: string }> {
   try {
     const response = await fetch(`${API_URL}?sheet=${encodeURIComponent(PURCHASE_ALLOCATION_SHEET)}&t=${Date.now()}`, { cache: 'no-store' });

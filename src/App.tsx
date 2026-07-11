@@ -268,7 +268,14 @@ export default function App() {
     uploadPoCopy: string = '',
     paymentTerms: string = '',
     shortageCondition: string = '',
-    suppliers: Supplier[] = []
+    suppliers: Supplier[] = [],
+    l1PartyName: string = '',
+    l1PartyPurchase: string = '',
+    saleQuantity: string = '',
+    saleRate: string = '',
+    saleUploadSoCopy: string = '',
+    salePaymentTerms: string = '',
+    saleShortageCondition: string = ''
   ): Promise<boolean> => {
     let success = false;
     const updatedEntry: ActionEntry = {
@@ -284,7 +291,8 @@ export default function App() {
       purchaseRate,
       uploadPoCopy,
       paymentTerms,
-      shortageCondition
+      shortageCondition,
+      l1PartyName
     };
 
     if (isOffline) {
@@ -310,7 +318,14 @@ export default function App() {
         purchaseRate,
         uploadPoCopy,
         paymentTerms,
-        shortageCondition
+        shortageCondition,
+        l1PartyName,
+        l1PartyPurchase,
+        saleQuantity,
+        saleRate,
+        saleUploadSoCopy,
+        salePaymentTerms,
+        saleShortageCondition
       );
       if (res.success) {
         // Mirror each supplier as its own row in the 'Purchase Allocation' sheet.

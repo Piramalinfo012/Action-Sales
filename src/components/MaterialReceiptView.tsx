@@ -230,13 +230,13 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
     const inputId = `receipt-file-${key}`;
     return (
       <div className="space-y-1.5">
-        <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">{label}</label>
+        <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">{label}</label>
         {!url && !up.uploading && (
           <div
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) processFile(f, key); }}
             onClick={() => document.getElementById(inputId)?.click()}
-            className="border border-dashed rounded-xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1.5 border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-600 bg-slate-50/50 dark:bg-slate-950/20"
+            className="border border-dashed rounded-xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1.5 border-slate-300 dark:border-slate-600 shadow-sm hover:border-indigo-400 dark:hover:border-indigo-600 bg-slate-50/50 dark:bg-slate-950/20"
           >
             <input id={inputId} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) processFile(f, key); }} accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx" />
             <div className="p-1.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800">
@@ -440,15 +440,24 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
                       </td>
                     </tr>
                   ) : (
-                    filtered.map((r) => (
-                      <tr key={r.rowIndex} className="group hover:bg-emerald-50/40 dark:hover:bg-slate-800/30 transition-colors">
+                    filtered.map((r) => {
+                      const isSale = r.allocationId?.includes('/S');
+                      return (
+                        <tr key={r.rowIndex} className={`${isSale ? 'bg-purple-50/40 hover:bg-purple-50/60 dark:bg-purple-900/20 dark:hover:bg-purple-900/40' : 'group hover:bg-emerald-50/40 dark:hover:bg-slate-800/30 transition-colors'}`}>
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-2.5 max-w-xs">
                             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500/15 to-teal-500/15 border border-emerald-500/10 flex items-center justify-center text-[11px] font-black text-emerald-600 dark:text-emerald-400 shrink-0 uppercase">
                               {(r.companyName || '?').trim().charAt(0)}
                             </div>
                             <div className="space-y-0.5 min-w-0">
-                              <div className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{r.companyName || r.id}</div>
+                              <div className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate flex items-center gap-1.5">
+                                  {r.companyName || r.id}
+                                  {isSale && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800 bg-purple-100 dark:bg-purple-900/40 text-[8px] font-black uppercase tracking-widest text-purple-700 dark:text-purple-300">
+                                      Sale
+                                    </span>
+                                  )}
+                                </div>
                               <div className="text-[11px] text-slate-400 truncate flex items-center gap-1 font-medium">
                                 <Box className="w-3 h-3 shrink-0" />
                                 <span>{r.productName || '—'}</span>
@@ -514,7 +523,8 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
                           )}
                         </td>
                       </tr>
-                    ))
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -557,76 +567,89 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
               </div>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-4">
+            <form onSubmit={handleSave} className="space-y-6">
               {/* AC Reciept Material is auto-stamped on save (hidden). */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Shortage Qty (If Any)</label>
-                  <input
-                    type="text"
-                    value={fields.shortageQty}
-                    onChange={(e) => setFields({ ...fields, shortageQty: e.target.value })}
-                    placeholder="e.g. 0"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-semibold transition-all"
-                  />
-                </div>
-
-                {/* Uplaod Recieving — file upload */}
-                {renderUpload('uploadReceiving', 'Uplaod Recieving')}
-
-                {/* Credit Note Requested by Party (If Any) — file upload */}
-                {renderUpload('creditNoteRequested', 'Credit Note Requested by Party (If Any)')}
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Invoice Review &amp; Credit Note Decision</label>
-                  <input
-                    type="text"
-                    value={fields.invoiceReviewDecision}
-                    onChange={(e) => setFields({ ...fields, invoiceReviewDecision: e.target.value })}
-                    placeholder="e.g. Approved, Rejected..."
-                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-semibold transition-all"
-                  />
-                </div>
-
-                {/* Upload Vendor Credit Note — file upload */}
-                {renderUpload('uploadVendorCreditNote', 'Upload Vendor Credit Note')}
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Gate In Date &amp; Time</label>
-                  <input
-                    type="datetime-local"
-                    value={fields.gateInDateTime}
-                    onChange={(e) => setFields({ ...fields, gateInDateTime: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-semibold transition-all"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Gate Out Date &amp; Time</label>
-                  <input
-                    type="datetime-local"
-                    value={fields.gateOutDateTime}
-                    onChange={(e) => setFields({ ...fields, gateOutDateTime: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-semibold transition-all"
-                  />
-                </div>
-
-                {fields.gateInDateTime && fields.gateOutDateTime && (
-                  <div className="col-span-1 md:col-span-2 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl p-3 flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Unloading Duration</span>
-                    <span className="text-sm font-black text-emerald-700 dark:text-emerald-300">
-                      {(() => {
-                        const d1 = new Date(fields.gateInDateTime);
-                        const d2 = new Date(fields.gateOutDateTime);
-                        if (!isNaN(d1.getTime()) && !isNaN(d2.getTime())) {
-                          const diff = (d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24);
-                          return diff > 0 ? diff.toFixed(2) + ' days' : '0 days';
-                        }
-                        return '—';
-                      })()}
-                    </span>
+              
+              {/* Gate Timings Section */}
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest border-b border-emerald-500/10 pb-1.5">Timing Details</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Gate In Date &amp; Time</label>
+                    <input
+                      type="datetime-local"
+                      value={fields.gateInDateTime}
+                      onChange={(e) => setFields({ ...fields, gateInDateTime: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-semibold transition-all"
+                    />
                   </div>
-                )}
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Gate Out Date &amp; Time</label>
+                    <input
+                      type="datetime-local"
+                      value={fields.gateOutDateTime}
+                      onChange={(e) => setFields({ ...fields, gateOutDateTime: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-semibold transition-all"
+                    />
+                  </div>
+
+                  {fields.gateInDateTime && fields.gateOutDateTime && (
+                    <div className="col-span-1 md:col-span-2 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl p-3 flex items-center justify-between mt-1">
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Unloading Duration</span>
+                      <span className="text-sm font-black text-emerald-700 dark:text-emerald-300">
+                        {(() => {
+                          const d1 = new Date(fields.gateInDateTime);
+                          const d2 = new Date(fields.gateOutDateTime);
+                          if (!isNaN(d1.getTime()) && !isNaN(d2.getTime())) {
+                            const diff = (d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24);
+                            return diff > 0 ? diff.toFixed(2) + ' days' : '0 days';
+                          }
+                          return '—';
+                        })()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Receiving Section */}
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest border-b border-emerald-500/10 pb-1.5">Material Receiving</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Shortage Qty (If Any)</label>
+                    <input
+                      type="text"
+                      value={fields.shortageQty}
+                      onChange={(e) => setFields({ ...fields, shortageQty: e.target.value })}
+                      placeholder="e.g. 0"
+                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-semibold transition-all"
+                    />
+                  </div>
+                  {renderUpload('uploadReceiving', 'Upload Receiving')}
+                </div>
+              </div>
+
+              {/* Credit Note Section */}
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest border-b border-emerald-500/10 pb-1.5">Credit Note &amp; Invoice</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Invoice Review &amp; Decision</label>
+                    <input
+                      type="text"
+                      value={fields.invoiceReviewDecision}
+                      onChange={(e) => setFields({ ...fields, invoiceReviewDecision: e.target.value })}
+                      placeholder="e.g. Approved, Rejected..."
+                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-semibold transition-all"
+                    />
+                  </div>
+                  {renderUpload('creditNoteRequested', 'Credit Note Requested by Customer')}
+                  <div className="md:col-span-2">
+                    {renderUpload('uploadVendorCreditNote', 'Upload Vendor Credit Note')}
+                  </div>
+                </div>
               </div>
 
               <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">

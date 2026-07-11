@@ -405,8 +405,10 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
                       </td>
                     </tr>
                   ) : (
-                    filtered.map((r) => (
-                      <tr key={r.rowIndex} className="group hover:bg-indigo-50/40 dark:hover:bg-slate-800/30 transition-colors">
+                    filtered.map((r) => {
+                      const isSale = r.allocationId?.includes('/S');
+                      return (
+                        <tr key={r.rowIndex} className={`${isSale ? 'bg-purple-50/40 hover:bg-purple-50/60 dark:bg-purple-900/20 dark:hover:bg-purple-900/40' : 'group hover:bg-indigo-50/40 dark:hover:bg-slate-800/30 transition-colors'}`}>
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-2.5 max-w-xs">
                             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500/15 to-violet-500/15 border border-indigo-500/10 flex items-center justify-center text-[11px] font-black text-indigo-600 dark:text-indigo-400 shrink-0 uppercase">
@@ -516,7 +518,8 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
                           )}
                         </td>
                       </tr>
-                    ))
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -600,19 +603,19 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
 
                 {/* Dispatch Status */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Dispatch Status</label>
+                  <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Dispatch Status</label>
                   <input
                     type="text"
                     value={fields.dispatchStatus}
                     onChange={(e) => setFields({ ...fields, dispatchStatus: e.target.value })}
                     placeholder="e.g. In Transit, Delivered..."
-                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all"
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all"
                   />
                 </div>
 
                 {/* Dispatch QTY */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Dispatch QTY</label>
+                  <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Dispatch QTY</label>
                   <div className="relative">
                     <Package className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                     <input
@@ -620,21 +623,21 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
                       value={fields.statusDispatchQty}
                       onChange={(e) => setFields({ ...fields, statusDispatchQty: e.target.value })}
                       placeholder="e.g. 4500"
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all"
                     />
                   </div>
                 </div>
 
                 {/* Dispatch Date */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Dispatch Date</label>
+                  <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Dispatch Date</label>
                   <div className="relative">
                     <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                     <input
                       type="date"
                       value={parseDateForInput(fields.statusDispatchDate)}
                       onChange={(e) => setFields({ ...fields, statusDispatchDate: e.target.value })}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all"
                     />
                   </div>
                 </div>
@@ -645,14 +648,14 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
                 {([
                   { key: 'invoiceVendor' as UploadKey, label: 'Upload Invoice Recievd From Vender', show: true },
                   { key: 'taxInvoiceWayBill' as UploadKey, label: 'Uplaod Tax Invoice With way Bill', show: true },
-                  { key: 'uploadTransportationBill' as UploadKey, label: 'Upload Tranporation Bill', show: editingRow.transportation?.trim() === 'Own Transport(PPPL)' }
+                  { key: 'uploadTransportationBill' as UploadKey, label: 'Upload Tranporation Bill', show: (editingRow.allocationId?.includes('/S') ? editingRow.transportation?.trim() === 'Vender Transport' : editingRow.transportation?.trim() === 'Own Transport(PPPL)') }
                 ]).filter(item => item.show).map(({ key, label }) => {
                   const up = uploads[key];
                   const url = fields[key];
                   const inputId = `dispatch-status-file-${key}`;
                   return (
                     <div key={key} className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">{label}</label>
+                      <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">{label}</label>
 
                       {/* Drag & drop / browse */}
                       {!url && !up.uploading && (
@@ -660,7 +663,7 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
                           onDragOver={(e) => e.preventDefault()}
                           onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) processInvoiceFile(f, key); }}
                           onClick={() => document.getElementById(inputId)?.click()}
-                          className="border border-dashed rounded-xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1.5 border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-600 bg-slate-50/50 dark:bg-slate-950/20"
+                          className="border border-dashed rounded-xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1.5 border-slate-300 dark:border-slate-600 shadow-sm hover:border-indigo-400 dark:hover:border-indigo-600 bg-slate-50/50 dark:bg-slate-950/20"
                         >
                           <input
                             id={inputId}
