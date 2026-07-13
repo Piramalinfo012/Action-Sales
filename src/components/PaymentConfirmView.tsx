@@ -433,7 +433,7 @@ export default function PaymentConfirmView({ onAddToast }: PaymentConfirmViewPro
                             {r.companyName || '—'}
                             {isSale && (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800 bg-purple-100 dark:bg-purple-900/40 text-[8px] font-black uppercase tracking-widest text-purple-700 dark:text-purple-300">
-                                Sale
+                                L1
                               </span>
                             )}
                           </div>

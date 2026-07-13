@@ -515,7 +515,7 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
                           <div className="flex items-center gap-2">
                             <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">{r.supplierName || '—'}</div>
                             {r.isSale && (
-                              <span className="text-[9px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full uppercase tracking-wider">Sale</span>
+                              <span className="text-[9px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full uppercase tracking-wider">L1</span>
                             )}
                           </div>
                           <div className="text-[10px] text-slate-400 font-mono">{r.allocationId}</div>
