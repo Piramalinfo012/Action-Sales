@@ -61,12 +61,9 @@ export default function PaymentConfirmView({ onAddToast }: PaymentConfirmViewPro
     if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
     return '';
   };
-  // YYYY-MM-DD -> DD/MM/YYYY (for storing)
+  // YYYY-MM-DD -> YYYY-MM-DD (pass through for Google Sheets native parsing)
   const formatDateForSave = (dateStr: string) => {
-    if (!dateStr) return '';
-    const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (m) return `${m[3]}/${m[2]}/${m[1]}`;
-    return dateStr;
+    return dateStr || '';
   };
 
   const loadRows = async (notify = false, silent = false) => {
@@ -187,12 +184,12 @@ export default function PaymentConfirmView({ onAddToast }: PaymentConfirmViewPro
     if (!editingRow) return;
     setIsSaving(true);
 
-    // AC Payment Confirmation auto-stamps today's date (DD/MM/YYYY).
+    // AC Payment Confirmation auto-stamps today's date (YYYY-MM-DD for native Google Sheets date parsing).
     const d = new Date();
-    const todayDDMM = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    const todayYMD = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     const payload = {
-      acPaymentConfirmation: todayDDMM,
+      acPaymentConfirmation: todayYMD,
       uploadReceivedOfPayment: fields.uploadReceivedOfPayment,
       paymentReceivedDate: formatDateForSave(fields.paymentReceivedDate),
       paymentRemark: fields.paymentRemark

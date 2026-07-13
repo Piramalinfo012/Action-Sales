@@ -162,10 +162,7 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
 
   // Convert "YYYY-MM-DD" back to "DD/MM/YYYY" before saving
   const formatDateForSave = (dateStr: string) => {
-    if (!dateStr) return '';
-    const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (match) return `${match[3]}/${match[2]}/${match[1]}`;
-    return dateStr;
+    return dateStr || '';
   };
   
   // For datetime picker, it wants YYYY-MM-DD
@@ -194,13 +191,13 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
     if (!editingRow) return;
     setIsSaving(true);
 
-    // AC Dispatch Status auto-stamps today's date (DD/MM/YYYY).
+    // AC Dispatch Status auto-stamps today's date (YYYY-MM-DD for native Google Sheets date parsing).
     const d = new Date();
-    const todayDDMM = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    const todayYMD = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     const payload = {
       ...fields,
-      acDispatchStatus: todayDDMM,
+      acDispatchStatus: todayYMD,
       statusDispatchDate: formatDateForSave(fields.statusDispatchDate)
     };
 

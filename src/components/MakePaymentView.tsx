@@ -170,10 +170,10 @@ export default function MakePaymentView({ onAddToast }: MakePaymentViewProps) {
     setIsSaving(true);
 
     const d = new Date();
-    const todayDDMM = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    const todayYMD = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     const payload = {
-      acMakePayment: todayDDMM,
+      acMakePayment: todayYMD,
       uploadInvoiceEwayBill: fields.uploadInvoiceEwayBill,
       transportBill: fields.transportBill,
       makePaymentRemark: fields.makePaymentRemark

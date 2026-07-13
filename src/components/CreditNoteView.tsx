@@ -171,9 +171,9 @@ export default function CreditNoteView({ onAddToast }: CreditNoteViewProps) {
     setIsSaving(true);
 
     const d = new Date();
-    const todayDDMM = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    const todayYMD = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-    const payload = { ...fields, acCreditNote: todayDDMM };
+    const payload = { ...fields, acCreditNote: todayYMD };
     const res = await updateCreditNoteInSheet(editingRow.rowIndex, payload);
     setIsSaving(false);
 

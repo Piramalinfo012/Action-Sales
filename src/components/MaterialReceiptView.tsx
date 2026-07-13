@@ -190,11 +190,11 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
     if (!editingRow) return;
     setIsSaving(true);
 
-    // AC Reciept Material auto-stamps today's date (DD/MM/YYYY).
+    // AC Reciept Material auto-stamps today's date (YYYY-MM-DD for native Google Sheets date parsing).
     const d = new Date();
-    const todayDDMM = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    const todayYMD = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-    const payload = { ...fields, acReceiptMaterial: todayDDMM };
+    const payload = { ...fields, acReceiptMaterial: todayYMD };
     const res = await updateMaterialReceiptInSheet(editingRow.rowIndex, payload);
     setIsSaving(false);
 
