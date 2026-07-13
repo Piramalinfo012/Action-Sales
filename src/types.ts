@@ -3,6 +3,7 @@ export interface User {
   username: string;
   role: 'Admin' | 'Sales' | 'Manager';
   rowIndex?: number; // Store the sheet row index to facilitate password updates
+  profileUrl?: string;
 }
 
 export interface ActionEntry {
