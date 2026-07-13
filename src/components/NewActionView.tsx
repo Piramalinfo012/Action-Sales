@@ -1401,7 +1401,7 @@ const handleSaleDragOver = (e: React.DragEvent) => {
                               {/* Show L1 Party Name if Sale Allocation */}
                               {action.areWeL1 === 'No' && action.l1PartyName && (
                                 <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 shadow-sm">
-                                  <span className="text-[9px] font-black uppercase tracking-widest text-white bg-purple-500 rounded px-1.5 py-0.5">Sale</span>
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-white bg-purple-500 rounded px-1.5 py-0.5">L1</span>
                                   <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300">{action.l1PartyName}</span>
                                 </div>
                               )}

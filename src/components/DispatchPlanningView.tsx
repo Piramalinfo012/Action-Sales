@@ -747,9 +747,10 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
                       <option value="">Select transport…</option>
                       <option value="Own Transport(PPPL)">Own Transport(PPPL)</option>
                       <option value="Vender Transport">Vender Transport</option>
+                      <option value="Other transport">Other transport</option>
                       {/* Keep a previously-saved custom value if present */}
                       {fields.transportation &&
-                        !['Own Transport(PPPL)', 'Vender Transport'].includes(fields.transportation) && (
+                        !['Own Transport(PPPL)', 'Vender Transport', 'Other transport'].includes(fields.transportation) && (
                           <option value={fields.transportation}>{fields.transportation}</option>
                         )}
                     </select>
