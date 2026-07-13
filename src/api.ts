@@ -1269,3 +1269,26 @@ export async function updateMakePaymentInSheet(
     return { success: false, error: err.message || 'Network error updating make payment' };
   }
 }
+
+// Update user profile in 'Login' sheet
+export async function updateUserProfileInSheet(
+  rowIndex: number,
+  name: string,
+  username: string,
+  password: string,
+  role: string,
+  profileUrl: string
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    const rowData = [name, username, password, role, profileUrl];
+    const query = "?sheetName=Login&action=update&rowIndex=" + rowIndex + "&rowData=" + encodeURIComponent(JSON.stringify(rowData));
+    const response = await fetch(API_URL + query, { method: 'POST' });
+    const result = await response.json();
+    if (result.success) {
+      return { success: true, message: result.message };
+    }
+    return { success: false, error: result.error || 'Failed to update profile' };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error updating profile' };
+  }
+}

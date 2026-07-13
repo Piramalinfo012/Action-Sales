@@ -121,7 +121,8 @@ export default function LoginView({ onLoginSuccess, onAddToast }: LoginViewProps
           name: userRow.name,
           username: userRow.username,
           role: userRow.role as any,
-          rowIndex: userRow.rowIndex
+          rowIndex: userRow.rowIndex,
+          profileUrl: userRow['profile url'] || userRow['profileUrl'] || ''
         };
 
         localStorage.setItem('currentUser', JSON.stringify(authenticatedUser));
