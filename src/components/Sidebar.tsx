@@ -41,7 +41,6 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
     { id: 'material-receipt' as SidebarTab, label: 'Material Receipt', icon: PackageCheck, roles: ['Admin', 'Manager'] },
     { id: 'accounts-group' as any, label: 'Accounts', icon: Wallet, roles: ['Admin', 'Manager'] },
     { id: 'history' as SidebarTab, label: 'History', icon: History, roles: ['Admin', 'Sales', 'Manager'] },
-    { id: 'reports' as SidebarTab, label: 'Reports', icon: BarChart3, roles: ['Admin', 'Manager'] },
     { id: 'drive-folder' as SidebarTab, label: 'Shared Drive', icon: FolderOpen, roles: ['Admin', 'Sales', 'Manager'] },
     { id: 'user-settings' as SidebarTab, label: 'User Settings', icon: Users, roles: ['Admin'] },
     { id: 'settings' as SidebarTab, label: 'Settings', icon: SettingsIcon, roles: ['Admin', 'Sales', 'Manager'] },

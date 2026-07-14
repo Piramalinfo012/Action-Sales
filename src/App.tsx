@@ -45,7 +45,6 @@ import DispatchPlanningView from './components/DispatchPlanningView';
 import DispatchStatusView from './components/DispatchStatusView';
 import MaterialReceiptView from './components/MaterialReceiptView';
 import HistoryView from './components/HistoryView';
-import ReportsView from './components/ReportsView';
 import CreditNoteView from './components/CreditNoteView';
 import PaymentConfirmView from './components/PaymentConfirmView';
 import MakePaymentView from './components/MakePaymentView';
@@ -59,6 +58,51 @@ interface Toast {
   type: 'success' | 'error' | 'info';
   title: string;
   desc: string;
+}
+
+function TypewriterDeveloperText() {
+  const [displayedDevText, setDisplayedDevText] = useState("");
+
+  useEffect(() => {
+    const fullText = "DEVELOPED BY DEEPAK SAHU";
+    let index = 0;
+    let isDeleting = false;
+    let timer: any;
+
+    const type = () => {
+      setDisplayedDevText(fullText.slice(0, index));
+
+      if (!isDeleting && index < fullText.length) {
+        index++;
+        timer = setTimeout(type, 150);
+      } else if (isDeleting && index > 0) {
+        index--;
+        timer = setTimeout(type, 75);
+      } else if (index === fullText.length) {
+        timer = setTimeout(() => {
+          isDeleting = true;
+          type();
+        }, 3000);
+      } else if (index === 0) {
+        isDeleting = false;
+        timer = setTimeout(type, 800);
+      }
+    };
+
+    type();
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <span className="text-transparent bg-clip-text animate-shine drop-shadow-sm flex items-center gap-1.5 font-black">
+      <span className="relative flex h-1.5 w-1.5 shrink-0">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 dark:bg-emerald-400 opacity-60"></span>
+        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-600 dark:bg-emerald-500"></span>
+      </span>
+      <span>{displayedDevText}</span>
+      <span className="animate-pulse w-1 h-3 bg-indigo-600 dark:bg-cyan-400 inline-block ml-0.5 shrink-0" />
+    </span>
+  );
 }
 
 export default function App() {
@@ -513,11 +557,7 @@ export default function App() {
             isOffline={isOffline}
           />
         );
-      case 'reports':
-        if (user.role === 'Sales') {
-          return <div className="p-8 text-center text-slate-500 font-semibold">Access Denied. Managerial clearance required.</div>;
-        }
-        return <ReportsView actions={actions} />;
+
       case 'drive-folder':
         return (
           <DriveFolderView 
@@ -658,17 +698,7 @@ export default function App() {
           <footer className="shrink-0 py-3 border-t border-slate-200/60 dark:border-slate-800/60 relative overflow-hidden flex items-center justify-center bg-slate-50/90 dark:bg-[#0a0f1c]/90 backdrop-blur-md z-40">
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-slate-100/30 dark:via-slate-800/10 to-transparent"></div>
               <div className="relative flex items-center justify-center flex-wrap gap-2.5 text-[10px] sm:text-xs font-bold tracking-[0.15em] uppercase">
-                <span className="text-slate-500/80 dark:text-slate-400/80">
-                  © 2026 Auction Sales Management
-                </span>
-                <span className="hidden sm:inline-block w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700"></span>
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500 drop-shadow-sm flex items-center gap-1.5">
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                  </span>
-                  DEVELOPED BY DEEPAK SAHU
-                </span>
+                <TypewriterDeveloperText />
               </div>
             </footer>
         </div>
