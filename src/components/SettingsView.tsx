@@ -183,36 +183,6 @@ export default function SettingsView({
               </button>
             </div>
           </div>
-
-          {/* Drive configuration card */}
-          <div className="glass-card rounded-3xl p-6">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-              Google Drive Integration
-            </h4>
-            <p className="text-[11px] text-slate-500 font-semibold mb-4 leading-relaxed">
-              Define the folder ID used to display team invoices, sheets, and transaction documents.
-            </p>
-
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <input
-                  type="text"
-                  value={localFolderId}
-                  onChange={(e) => setLocalFolderId(e.target.value)}
-                  placeholder="Enter Folder ID"
-                  className="w-full px-3 py-2 text-xs glass-input rounded-xl text-slate-900 dark:text-white font-mono focus:outline-none"
-                />
-              </div>
-
-              <button
-                onClick={handleSaveFolderId}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 cursor-pointer transition-all"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>Save Folder ID</span>
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Right column: Secure Change Password Form */}

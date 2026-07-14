@@ -24,7 +24,9 @@ import {
   Truck,
   PackageCheck,
   FileText,
-  CreditCard
+  CreditCard,
+  Users,
+  User as UserIcon
 } from 'lucide-react';
 import { User, ActionEntry, Supplier, SidebarTab } from './types';
 import {
@@ -48,6 +50,7 @@ import CreditNoteView from './components/CreditNoteView';
 import PaymentConfirmView from './components/PaymentConfirmView';
 import MakePaymentView from './components/MakePaymentView';
 import SettingsView from './components/SettingsView';
+import UserSettingsView from './components/UserSettingsView';
 import LoginView from './components/LoginView';
 import DriveFolderView from './components/DriveFolderView';
 
@@ -526,6 +529,16 @@ export default function App() {
             onUpdateDriveFolderId={handleUpdateDriveFolderId}
           />
         );
+      case 'user-settings':
+        if (user.role !== 'Admin') {
+          return <div className="p-8 text-center text-slate-500 font-semibold">Access Denied. Administrator clearance required.</div>;
+        }
+        return (
+          <UserSettingsView 
+            user={user} 
+            onAddToast={(type, title, desc) => addToast(type as any, title, desc)} 
+          />
+        );
       default:
         return <div>Tab not found</div>;
     }
@@ -543,15 +556,16 @@ export default function App() {
     { id: 'history' as SidebarTab, label: 'History', icon: History, roles: ['Admin', 'Sales', 'Manager'] },
     { id: 'reports' as SidebarTab, label: 'Reports', icon: BarChart3, roles: ['Admin', 'Manager'] },
     { id: 'drive-folder' as SidebarTab, label: 'Shared Drive', icon: FolderOpen, roles: ['Admin', 'Sales', 'Manager'] },
+    { id: 'user-settings' as SidebarTab, label: 'User Settings', icon: Users, roles: ['Admin'] },
     { id: 'settings' as SidebarTab, label: 'Settings', icon: SettingsIcon, roles: ['Admin', 'Sales', 'Manager'] },
   ];
 
   const allowedMobileItems = menuItems.filter(item => item.roles.includes(user.role));
 
   return (
-    <div className={`min-h-screen font-sans transition-colors duration-300 ${darkMode ? 'dark sleek-bg-dark text-slate-100' : 'sleek-bg-light text-slate-800'}`}>
+    <div className={`h-screen overflow-hidden font-sans transition-colors duration-300 ${darkMode ? 'dark sleek-bg-dark text-slate-100' : 'sleek-bg-light text-slate-800'}`}>
       
-      <div className="flex">
+      <div className="flex h-full">
         {/* Desktop Left Navigation Sidebar */}
         <Sidebar 
           activeTab={activeTab} 
@@ -561,7 +575,7 @@ export default function App() {
         />
 
         {/* Right workspace contents */}
-        <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
+        <div className="flex-1 flex flex-col h-full overflow-hidden">
           
           {/* Header Bar */}
           <header className="h-16 glass-nav sticky top-0 z-40 flex items-center justify-between px-6">
@@ -604,20 +618,52 @@ export default function App() {
               >
                 {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
               </button>
+
+              {/* User Details & Logout */}
+              {user && (
+                <div className="hidden sm:flex items-center gap-4 pl-4 border-l border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-500">
+                      <UserIcon className="w-4 h-4" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-slate-800 dark:text-slate-200 leading-tight">{user.name}</span>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-tight">{user.role}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="p-2 text-rose-500 hover:bg-rose-500/10 rounded-xl transition-colors cursor-pointer"
+                    title="Logout"
+                  >
+                    <LogOut className="w-4.5 h-4.5" />
+                  </button>
+                </div>
+              )}
             </div>
           </header>
 
           {/* Render Active tab content */}
-          <main className="flex-1 p-6 md:p-8 overflow-y-auto flex flex-col justify-between">
-            <div className="flex-1">
-              {renderTabContent()}
-            </div>
-            
-            <footer className="mt-8 pt-4 border-t border-slate-200 dark:border-slate-800/80 text-center text-xs font-bold text-slate-500 tracking-widest flex items-center justify-center flex-wrap gap-2">
-              <span>© {new Date().getFullYear()} Auction Sales Management.</span>
-              <span className="text-emerald-500/80">DEVELOPED BY DEEPAK SAHU</span>
-            </footer>
+          <main className="flex-1 p-6 md:p-8 overflow-y-auto">
+            {renderTabContent()}
           </main>
+          
+          <footer className="shrink-0 py-3 border-t border-slate-200/60 dark:border-slate-800/60 relative overflow-hidden flex items-center justify-center bg-slate-50/90 dark:bg-[#0a0f1c]/90 backdrop-blur-md z-40">
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-slate-100/30 dark:via-slate-800/10 to-transparent"></div>
+              <div className="relative flex items-center justify-center flex-wrap gap-2.5 text-[10px] sm:text-xs font-bold tracking-[0.15em] uppercase">
+                <span className="text-slate-500/80 dark:text-slate-400/80">
+                  © 2026 Auction Sales Management
+                </span>
+                <span className="hidden sm:inline-block w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700"></span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500 drop-shadow-sm flex items-center gap-1.5">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                  </span>
+                  DEVELOPED BY DEEPAK SAHU
+                </span>
+              </div>
+            </footer>
         </div>
       </div>
 

@@ -25,7 +25,7 @@ import {
   Layers
 } from 'lucide-react';
 import { ActionEntry, Supplier, User as UserType } from '../types';
-import { getProductsFromMasterSheet, getOfflineProducts, getSuppliersForEntry, API_URL } from '../api';
+import { getProductsFromMasterSheet, getOfflineProducts, getSuppliersForEntry, API_URL, getL1TermsFromMaster } from '../api';
 
 interface NewActionViewProps {
   onAddAction: (entry: ActionEntry) => Promise<boolean>;
@@ -141,6 +141,15 @@ export default function NewActionView({
   const [saleDragging, setSaleDragging] = useState(false);
   const [salePaymentTerms, setSalePaymentTerms] = useState('');
   const [saleShortageCondition, setSaleShortageCondition] = useState('');
+  const [masterL1Terms, setMasterL1Terms] = useState<{ yesTerms: string, yesShortage: string, noTerms: string, noShortage: string } | null>(null);
+
+  useEffect(() => {
+    getL1TermsFromMaster().then(res => {
+      if (res.success && res.data) {
+        setMasterL1Terms(res.data);
+      }
+    });
+  }, []);
 
   // Multi-supplier allocation: an order can be split across several suppliers
   // (e.g. 300 = 100 + 100 + 100). Each supplier holds its own PO copy & terms.
@@ -153,8 +162,8 @@ export default function NewActionView({
     purchaseQuantity: '',
     purchaseRate: '',
     uploadPoCopy: '',
-    paymentTerms: '',
-    shortageCondition: '',
+    paymentTerms: masterL1Terms ? masterL1Terms.yesTerms : '',
+    shortageCondition: masterL1Terms ? masterL1Terms.yesShortage : '',
     poMode: 'upload'
   });
 
@@ -1573,7 +1582,16 @@ const handleSaleDragOver = (e: React.DragEvent) => {
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
-                      onClick={() => setL1AreWeL1('Yes')}
+                      onClick={() => {
+                        setL1AreWeL1('Yes');
+                        if (masterL1Terms) {
+                          setL1Suppliers(prev => prev.map(s => ({
+                            ...s,
+                            paymentTerms: s.paymentTerms || masterL1Terms.yesTerms,
+                            shortageCondition: s.shortageCondition || masterL1Terms.yesShortage
+                          })));
+                        }
+                      }}
                       className={`py-2.5 px-4 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                         l1AreWeL1 === 'Yes'
                           ? 'bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-500 dark:border-emerald-500/80'
@@ -1585,7 +1603,13 @@ const handleSaleDragOver = (e: React.DragEvent) => {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setL1AreWeL1('No')}
+                      onClick={() => {
+                        setL1AreWeL1('No');
+                        if (masterL1Terms) {
+                          setSalePaymentTerms(prev => prev || masterL1Terms.noTerms);
+                          setSaleShortageCondition(prev => prev || masterL1Terms.noShortage);
+                        }
+                      }}
                       className={`py-2.5 px-4 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                         l1AreWeL1 === 'No'
                           ? 'bg-rose-500/15 border-rose-500 text-rose-600 dark:text-rose-500 dark:border-rose-500/80'

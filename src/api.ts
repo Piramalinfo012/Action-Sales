@@ -417,6 +417,34 @@ export async function getProductsFromMasterSheet(): Promise<{ success: boolean; 
   }
 }
 
+// Fetch L1 Confirmation terms and conditions from Master sheet
+export async function getL1TermsFromMaster(): Promise<{
+  success: boolean;
+  data: { yesTerms: string; yesShortage: string; noTerms: string; noShortage: string; };
+  error?: string;
+}> {
+  try {
+    const response = await fetch(`${API_URL}?sheet=Master&t=${Date.now()}`, { cache: 'no-store' });
+    const result = await response.json();
+    if (result.success && Array.isArray(result.data)) {
+      // Row 3 is index 2
+      const row3 = result.data[2] || [];
+      return {
+        success: true,
+        data: {
+          yesTerms: row3[2] !== undefined ? row3[2].toString().trim() : '',
+          yesShortage: row3[3] !== undefined ? row3[3].toString().trim() : '',
+          noTerms: row3[4] !== undefined ? row3[4].toString().trim() : '',
+          noShortage: row3[5] !== undefined ? row3[5].toString().trim() : '',
+        }
+      };
+    }
+    return { success: false, data: { yesTerms: '', yesShortage: '', noTerms: '', noShortage: '' }, error: result.error || 'Failed to read Master sheet' };
+  } catch (err: any) {
+    return { success: false, data: { yesTerms: '', yesShortage: '', noTerms: '', noShortage: '' }, error: err.message || 'Network error' };
+  }
+}
+
 // Fetch Material Sources from Google Sheet 'Master' Column A (A2:A). Used as the
 // "Material To Be supplied From" dropdown options in Dispatch Planning.
 export async function getMaterialSourcesFromMaster(): Promise<{ success: boolean; data: string[]; error?: string }> {

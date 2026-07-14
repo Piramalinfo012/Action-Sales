@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   LayoutDashboard,
   PlusCircle,
@@ -9,6 +10,7 @@ import {
   Settings as SettingsIcon, 
   LogOut,
   User,
+  Users,
   Shield,
   Activity,
   PackageCheck,
@@ -41,6 +43,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
     { id: 'history' as SidebarTab, label: 'History', icon: History, roles: ['Admin', 'Sales', 'Manager'] },
     { id: 'reports' as SidebarTab, label: 'Reports', icon: BarChart3, roles: ['Admin', 'Manager'] },
     { id: 'drive-folder' as SidebarTab, label: 'Shared Drive', icon: FolderOpen, roles: ['Admin', 'Sales', 'Manager'] },
+    { id: 'user-settings' as SidebarTab, label: 'User Settings', icon: Users, roles: ['Admin'] },
     { id: 'settings' as SidebarTab, label: 'Settings', icon: SettingsIcon, roles: ['Admin', 'Sales', 'Manager'] },
   ];
 
@@ -51,35 +54,23 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
   });
 
   return (
-    <aside className="hidden md:flex flex-col w-64 glass-sidebar text-slate-300 min-h-screen sticky top-0">
+    <aside className="hidden md:flex flex-col w-64 glass-sidebar text-slate-300 h-full sticky top-0 overflow-y-auto custom-scrollbar border-r border-slate-800/40">
       {/* Brand Section */}
-      <div className="p-6 border-b border-slate-800 flex items-center gap-3 bg-slate-950/40">
-        <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-500/20">
+      <div className="p-6 border-b border-slate-850 flex items-center gap-3 bg-slate-950/45 relative overflow-hidden group">
+        <div className="absolute -left-12 -top-12 w-28 h-28 rounded-full bg-blue-500/10 blur-xl pointer-events-none group-hover:bg-blue-500/15 transition-all duration-500" />
+        <motion.div 
+          whileHover={{ scale: 1.06, rotate: 4 }}
+          className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-lg shadow-lg shadow-blue-500/20 relative z-10"
+        >
           AS
-        </div>
-        <div>
-          <h1 className="font-semibold text-white tracking-tight text-sm">Auction Sales</h1>
-          <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Management System</span>
+        </motion.div>
+        <div className="relative z-10">
+          <h1 className="font-bold text-white tracking-tight text-sm uppercase">Auction Sales</h1>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mt-0.5">Management System</span>
         </div>
       </div>
 
-      {/* User Section */}
-      {user && (
-        <div className="p-5 border-b border-slate-800 bg-slate-950/20">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
-              <User className="w-5 h-5" />
-            </div>
-            <div className="overflow-hidden">
-              <p className="font-semibold text-white text-sm truncate">{user.name}</p>
-              <div className="flex items-center gap-1.5 text-slate-400 text-xs">
-                <Shield className="w-3.5 h-3.5 text-blue-400" />
-                <span>{user.role}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1.5">
@@ -93,42 +84,61 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
                   className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer ${
                     isDispatchActive && !isDispatchOpen
                       ? 'bg-blue-600/10 text-blue-400'
-                      : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
+                      : 'text-slate-400 hover:bg-slate-800/40 hover:text-white'
                   }`}
                 >
                   <div className="flex items-center gap-3.5">
                     <Truck className={`w-5 h-5 transition-transform duration-300 ${isDispatchActive ? 'text-blue-400 scale-110' : ''}`} />
                     <span>{item.label}</span>
                   </div>
-                  {isDispatchOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isDispatchOpen ? 'rotate-0' : '-rotate-90'}`} />
                 </button>
                 
-                {isDispatchOpen && (
-                  <div className="pl-12 pr-2 space-y-1 mt-1">
-                    <button
-                      onClick={() => setActiveTab('pending')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-all duration-300 cursor-pointer ${
-                        activeTab === 'pending'
-                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/15'
-                          : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
-                      }`}
+                <AnimatePresence initial={false}>
+                  {isDispatchOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: 'easeInOut' }}
+                      className="pl-11 pr-2 space-y-1 mt-1 overflow-hidden"
                     >
-                      <Truck className="w-4 h-4 shrink-0" />
-                      <span className="leading-tight">Dispatch Planning</span>
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('dispatch-status')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-all duration-300 cursor-pointer ${
-                        activeTab === 'dispatch-status'
-                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/15'
-                          : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
-                      }`}
-                    >
-                      <Activity className="w-4 h-4 shrink-0" />
-                      <span className="leading-tight">Dispatch Status</span>
-                    </button>
-                  </div>
-                )}
+                      <button
+                        onClick={() => setActiveTab('pending')}
+                        className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-colors duration-250 cursor-pointer group"
+                      >
+                        {activeTab === 'pending' && (
+                          <motion.div
+                            layoutId="active-sub-pill"
+                            className="absolute inset-0 bg-blue-600 rounded-lg shadow-md shadow-blue-500/10"
+                            transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+                          />
+                        )}
+                        <span className="relative z-10 flex items-center gap-3 w-full">
+                          <Truck className={`w-4 h-4 shrink-0 transition-all duration-350 ${activeTab === 'pending' ? 'text-white scale-110' : 'text-slate-400 group-hover:text-slate-200'}`} />
+                          <span className={`leading-tight transition-all duration-350 ${activeTab === 'pending' ? 'text-white font-bold' : 'text-slate-400 group-hover:text-white'}`}>Dispatch Planning</span>
+                        </span>
+                      </button>
+                      
+                      <button
+                        onClick={() => setActiveTab('dispatch-status')}
+                        className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-colors duration-250 cursor-pointer group"
+                      >
+                        {activeTab === 'dispatch-status' && (
+                          <motion.div
+                            layoutId="active-sub-pill"
+                            className="absolute inset-0 bg-blue-600 rounded-lg shadow-md shadow-blue-500/10"
+                            transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+                          />
+                        )}
+                        <span className="relative z-10 flex items-center gap-3 w-full">
+                          <Activity className={`w-4 h-4 shrink-0 transition-all duration-350 ${activeTab === 'dispatch-status' ? 'text-white scale-110' : 'text-slate-400 group-hover:text-slate-200'}`} />
+                          <span className={`leading-tight transition-all duration-350 ${activeTab === 'dispatch-status' ? 'text-white font-bold' : 'text-slate-400 group-hover:text-white'}`}>Dispatch Status</span>
+                        </span>
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             );
           }
@@ -142,53 +152,78 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
                   className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer ${
                     isAccountsActive && !isAccountsOpen
                       ? 'bg-blue-600/10 text-blue-400'
-                      : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
+                      : 'text-slate-400 hover:bg-slate-800/40 hover:text-white'
                   }`}
                 >
                   <div className="flex items-center gap-3.5">
                     <Wallet className={`w-5 h-5 transition-transform duration-300 ${isAccountsActive ? 'text-blue-400 scale-110' : ''}`} />
                     <span>{item.label}</span>
                   </div>
-                  {isAccountsOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isAccountsOpen ? 'rotate-0' : '-rotate-90'}`} />
                 </button>
                 
-                {isAccountsOpen && (
-                  <div className="pl-12 pr-2 space-y-1 mt-1">
-                    <button
-                      onClick={() => setActiveTab('credit-note')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-all duration-300 cursor-pointer ${
-                        activeTab === 'credit-note'
-                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/15'
-                          : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
-                      }`}
+                <AnimatePresence initial={false}>
+                  {isAccountsOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: 'easeInOut' }}
+                      className="pl-11 pr-2 space-y-1 mt-1 overflow-hidden"
                     >
-                      <Receipt className="w-4 h-4 shrink-0" />
-                      <span className="leading-tight">Credit Note Creation</span>
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('payment-confirmation')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-all duration-300 cursor-pointer ${
-                        activeTab === 'payment-confirmation'
-                            ? 'bg-blue-600 text-white shadow-md shadow-blue-600/15'
-                            : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
-                        }`}
+                      <button
+                        onClick={() => setActiveTab('credit-note')}
+                        className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-colors duration-250 cursor-pointer group"
                       >
-                        <CheckCircle className="w-4 h-4 shrink-0" />
-                        <span className="leading-tight">Payment Confirmation</span>
+                        {activeTab === 'credit-note' && (
+                          <motion.div
+                            layoutId="active-sub-pill"
+                            className="absolute inset-0 bg-blue-600 rounded-lg shadow-md shadow-blue-500/10"
+                            transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+                          />
+                        )}
+                        <span className="relative z-10 flex items-center gap-3 w-full">
+                          <Receipt className={`w-4 h-4 shrink-0 transition-all duration-350 ${activeTab === 'credit-note' ? 'text-white scale-110' : 'text-slate-400 group-hover:text-slate-200'}`} />
+                          <span className={`leading-tight transition-all duration-350 ${activeTab === 'credit-note' ? 'text-white font-bold' : 'text-slate-400 group-hover:text-white'}`}>Credit Note Creation</span>
+                        </span>
                       </button>
+                      
+                      <button
+                        onClick={() => setActiveTab('payment-confirmation')}
+                        className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-colors duration-250 cursor-pointer group"
+                      >
+                        {activeTab === 'payment-confirmation' && (
+                          <motion.div
+                            layoutId="active-sub-pill"
+                            className="absolute inset-0 bg-blue-600 rounded-lg shadow-md shadow-blue-500/10"
+                            transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+                          />
+                        )}
+                        <span className="relative z-10 flex items-center gap-3 w-full">
+                          <CheckCircle className={`w-4 h-4 shrink-0 transition-all duration-350 ${activeTab === 'payment-confirmation' ? 'text-white scale-110' : 'text-slate-400 group-hover:text-slate-200'}`} />
+                          <span className={`leading-tight transition-all duration-350 ${activeTab === 'payment-confirmation' ? 'text-white font-bold' : 'text-slate-400 group-hover:text-white'}`}>Payment Confirmation</span>
+                        </span>
+                      </button>
+                      
                       <button
                         onClick={() => setActiveTab('make-payment')}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-all duration-300 cursor-pointer ${
-                          activeTab === 'make-payment'
-                            ? 'bg-blue-600 text-white shadow-md shadow-blue-600/15'
-                            : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
-                        }`}
+                        className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-colors duration-250 cursor-pointer group"
                       >
-                        <CreditCard className="w-4 h-4 shrink-0" />
-                        <span className="leading-tight">Make Payment</span>
+                        {activeTab === 'make-payment' && (
+                          <motion.div
+                            layoutId="active-sub-pill"
+                            className="absolute inset-0 bg-blue-600 rounded-lg shadow-md shadow-blue-500/10"
+                            transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+                          />
+                        )}
+                        <span className="relative z-10 flex items-center gap-3 w-full">
+                          <CreditCard className={`w-4 h-4 shrink-0 transition-all duration-350 ${activeTab === 'make-payment' ? 'text-white scale-110' : 'text-slate-400 group-hover:text-slate-200'}`} />
+                          <span className={`leading-tight transition-all duration-350 ${activeTab === 'make-payment' ? 'text-white font-bold' : 'text-slate-400 group-hover:text-white'}`}>Make Payment</span>
+                        </span>
                       </button>
-                    </div>
+                    </motion.div>
                   )}
+                </AnimatePresence>
               </div>
             );
           }
@@ -199,29 +234,24 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer ${
-                isActive
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/15'
-                  : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
-              }`}
+              className="relative w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-250 cursor-pointer group"
             >
-              <Icon className={`w-5 h-5 transition-transform duration-300 ${isActive ? 'scale-110' : ''}`} />
-              <span>{item.label}</span>
+              {isActive && (
+                <motion.div
+                  layoutId="active-pill"
+                  className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/20"
+                  transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+                />
+              )}
+              <span className="relative z-10 flex items-center gap-3.5 w-full">
+                <Icon className={`w-5 h-5 transition-all duration-350 ${isActive ? 'text-white scale-110' : 'text-slate-400 group-hover:text-slate-200 group-hover:scale-105'}`} />
+                <span className={`transition-all duration-350 ${isActive ? 'text-white font-bold' : 'text-slate-400 group-hover:text-white'}`}>{item.label}</span>
+              </span>
             </button>
           );
         })}
       </nav>
 
-      {/* Logout button */}
-      <div className="p-4 border-t border-slate-800 bg-slate-950/20">
-        <button
-          onClick={onLogout}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-all duration-300 cursor-pointer"
-        >
-          <LogOut className="w-5 h-5" />
-          <span>Logout</span>
-        </button>
-      </div>
     </aside>
   );
 }
