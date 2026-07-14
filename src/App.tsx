@@ -246,7 +246,8 @@ export default function App() {
       // Remote sheet update
       const res = await updateActionInSheet(rowIndex, updatedEntry);
       if (res.success) {
-        await loadActions();
+        setActions((prev) => prev.map((a) => a.id === updatedEntry.id ? updatedEntry : a));
+        loadActions(); // background refresh
         success = true;
         addToast('success', 'Record Modified', 'Successfully updated record in Google Sheet database!');
       } else {
@@ -331,12 +332,17 @@ export default function App() {
         saleShortageCondition
       );
       if (res.success) {
-        // Mirror each supplier as its own row in the 'Purchase Allocation' sheet.
-        const allocRes = await syncSuppliersToAllocation(entry, willPurchase, suppliers);
-        if (!allocRes.success) {
-          addToast('info', 'Allocation Sheet', allocRes.error || 'Saved L1, but could not update the Purchase Allocation sheet.');
-        }
-        await loadActions();
+        // Optimistic local update so UI reflects immediately
+        setActions((prev) => prev.map((a) => a.id === entry.id ? updatedEntry : a));
+        
+        // Background tasks
+        syncSuppliersToAllocation(entry, willPurchase, suppliers).then(allocRes => {
+          if (!allocRes.success) {
+            addToast('info', 'Allocation Sheet', allocRes.error || 'Saved L1, but could not update the Purchase Allocation sheet.');
+          }
+        });
+        loadActions(); // background refresh
+        
         success = true;
         addToast('success', 'L1 Confirmed', 'Successfully updated L1 Confirmation in Google Sheet database!');
       } else {
@@ -360,7 +366,8 @@ export default function App() {
       // Remote sheet delete
       const res = await deleteActionFromSheet(rowIndex);
       if (res.success) {
-        await loadActions();
+        setActions((prev) => prev.filter((a) => a.id !== actionId));
+        loadActions(); // background refresh
         success = true;
         addToast('success', 'Record Deleted', 'Permanently removed from Google Spreadsheet.');
       } else {

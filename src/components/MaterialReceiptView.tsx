@@ -188,23 +188,25 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     if (!editingRow) return;
-    setIsSaving(true);
-
     // AC Reciept Material auto-stamps today's date (YYYY-MM-DD for native Google Sheets date parsing).
     const d = new Date();
     const todayYMD = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     const payload = { ...fields, acReceiptMaterial: todayYMD };
-    const res = await updateMaterialReceiptInSheet(editingRow.rowIndex, payload);
-    setIsSaving(false);
-
-    if (!res.success) {
-      if (onAddToast) onAddToast('error', 'Update Failed', res.error || 'Could not save receipt.');
-      return;
-    }
-    if (onAddToast) onAddToast('success', 'Receipt Confirmed', 'Material receipt saved successfully.');
+    
+    // Optimistic Update
+    setRows(prev => prev.map(r => r.rowIndex === editingRow.rowIndex ? { ...r, ...payload } : r));
     setEditingRow(null);
-    loadRows(false, true);
+    if (onAddToast) onAddToast('success', 'Receipt Confirmed', 'Material receipt saved successfully.');
+
+    // Background Sync
+    updateMaterialReceiptInSheet(editingRow.rowIndex, payload).then(res => {
+      if (!res.success) {
+        if (onAddToast) onAddToast('error', 'Update Failed', res.error || 'Could not save receipt.');
+      } else {
+        loadRows(false, true);
+      }
+    });
   };
 
   const filtered = rows.filter((r) => {

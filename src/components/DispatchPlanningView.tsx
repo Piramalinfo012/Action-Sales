@@ -255,19 +255,23 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
       // Rupies/ltr is only valid for Own Transport(PPPL) — never store it otherwise.
       rupeesPerLtr: (editingRow.isSale ? fields.transportation === 'Vender Transport' : fields.transportation === 'Own Transport(PPPL)') ? fields.rupeesPerLtr : ''
     };
-    const res = await saveDispatchRecord(editingRow, payload);
-    setIsSaving(false);
-
-    if (!res.success) {
-      onAddToast('error', 'Update Failed', res.error || 'Could not save dispatch plan.');
-      return;
-    }
-
     const justDispatched = parseFloat(payload.dispatchQuantity) || 0;
     const newDispatched = editingRow.dispatchedQty + justDispatched;
     const newPending = editingRow.targetQty > 0 ? Math.max(0, editingRow.targetQty - newDispatched) : 0;
-
-    loadRows(false, true); // refresh the queue in the background
+    
+    // Optimistic Update
+    const updated: DispatchQueueRow = {
+      ...editingRow,
+      dispatchedQty: newDispatched,
+      pendingQty: newPending,
+      dispatchCount: editingRow.dispatchCount + 1,
+      lastRate: payload.rateProfiled,
+      lastMaterial: payload.materialSuppliedFrom,
+      lastTransportation: payload.transportation,
+      lastRupees: payload.rupeesPerLtr
+    };
+    
+    setRows(prev => prev.map(r => r.allocationId === editingRow.allocationId ? updated : r));
 
     if (editingRow.targetQty > 0 && newPending <= 0) {
       // Fully dispatched — order is complete and moves out of the active queue.
@@ -276,19 +280,18 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
     } else {
       // Reset the form for the next partial dispatch and keep the modal open.
       onAddToast('success', 'Dispatch Saved', `Dispatched ${justDispatched}. Pending: ${newPending}.`);
-      const updated: DispatchQueueRow = {
-        ...editingRow,
-        dispatchedQty: newDispatched,
-        pendingQty: newPending,
-        dispatchCount: editingRow.dispatchCount + 1,
-        lastRate: payload.rateProfiled,
-        lastMaterial: payload.materialSuppliedFrom,
-        lastTransportation: payload.transportation,
-        lastRupees: payload.rupeesPerLtr
-      };
       setEditingRow(updated);
       setFields(buildFields(updated));
     }
+
+    // Background Sync
+    saveDispatchRecord(editingRow, payload).then(res => {
+      if (!res.success) {
+        onAddToast('error', 'Update Failed', res.error || 'Could not save dispatch plan.');
+      } else {
+        loadRows(false, true); // refresh the queue in the background
+      }
+    });
   };
 
   const rowStatus = (r: DispatchQueueRow): DispatchStatus => {

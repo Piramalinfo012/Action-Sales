@@ -80,8 +80,7 @@ export default function NewActionView({
   // Derive an entry's L1 status the same way the status badge does.
   const getL1Status = (action: ActionEntry): 'completed' | 'pending' | 'notscheduled' => {
     if (action.actual1 && action.actual1.trim().length > 0) return 'completed';
-    if (action.planned1 && action.planned1.trim().length > 0) return 'pending';
-    return 'notscheduled';
+    return 'pending';
   };
 
   // Shared row filter: search text + selected L1 status.
@@ -887,7 +886,7 @@ const handleSaleDragOver = (e: React.DragEvent) => {
             {(() => {
               const total = actions.length;
               const completed = actions.filter(a => a.actual1 && a.actual1.trim().length > 0).length;
-              const pending = actions.filter(a => a.planned1 && a.planned1.trim().length > 0 && !(a.actual1 && a.actual1.trim().length > 0)).length;
+              const pending = actions.filter(a => !(a.actual1 && a.actual1.trim().length > 0)).length;
               const chips = [
                 { label: 'Total', value: total, dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400' },
                 { label: 'Completed', value: completed, dot: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400' },

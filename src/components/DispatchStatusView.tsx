@@ -189,8 +189,6 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     if (!editingRow) return;
-    setIsSaving(true);
-
     // AC Dispatch Status auto-stamps today's date (YYYY-MM-DD for native Google Sheets date parsing).
     const d = new Date();
     const todayYMD = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -201,17 +199,19 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
       statusDispatchDate: formatDateForSave(fields.statusDispatchDate)
     };
 
-    const res = await updateDispatchStatusInSheet(editingRow.rowIndex, payload);
-    setIsSaving(false);
-
-    if (!res.success) {
-      if (onAddToast) onAddToast('error', 'Update Failed', res.error || 'Could not save status.');
-      return;
-    }
-
-    if (onAddToast) onAddToast('success', 'Status Updated', 'Dispatch status saved successfully.');
+    // Optimistic Update
+    setRows(prev => prev.map(r => r.rowIndex === editingRow.rowIndex ? { ...r, ...payload } : r));
     setEditingRow(null);
-    loadRows(false, true);
+    if (onAddToast) onAddToast('success', 'Status Updated', 'Dispatch status saved successfully.');
+
+    // Background Sync
+    updateDispatchStatusInSheet(editingRow.rowIndex, payload).then(res => {
+      if (!res.success) {
+        if (onAddToast) onAddToast('error', 'Update Failed', res.error || 'Could not save status.');
+      } else {
+        loadRows(false, true);
+      }
+    });
   };
 
   // A dispatch is "done" (goes to History) once its AC Dispatch Status is set,

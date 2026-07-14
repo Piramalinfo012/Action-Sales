@@ -390,8 +390,15 @@ export default function CreditNoteView({ onAddToast }: CreditNoteViewProps) {
                     <td className="px-4 py-4 whitespace-nowrap">
                       <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{r.shortageQty || '—'}</span>
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{r.creditNoteRequested || '—'}</span>
+                    <td className="px-4 py-4 whitespace-nowrap max-w-[150px]">
+                      {r.creditNoteRequested && r.creditNoteRequested.startsWith('http') ? (
+                        <button onClick={() => window.open(r.creditNoteRequested, '_blank')} className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 truncate">
+                          <FileText className="w-3 h-3 shrink-0" />
+                          <span className="truncate">View Document</span>
+                        </button>
+                      ) : (
+                        <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 truncate block">{r.creditNoteRequested || '—'}</span>
+                      )}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
                       <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{r.invoiceReviewDecision || '—'}</span>
@@ -457,7 +464,7 @@ export default function CreditNoteView({ onAddToast }: CreditNoteViewProps) {
                 <div><span className="block text-slate-400 font-bold uppercase tracking-wider text-[9px]">AC Receipt</span><span className="font-bold text-slate-800 dark:text-slate-200">{formatDate(editingRow.acReceiptMaterial || '')}</span></div>
                 <div><span className="block text-slate-400 font-bold uppercase tracking-wider text-[9px]">Time Delay2</span><span className="font-bold text-slate-800 dark:text-slate-200">{editingRow.receiptTimeDelay2 || '—'}</span></div>
                 <div><span className="block text-slate-400 font-bold uppercase tracking-wider text-[9px]">Shortage Qty</span><span className="font-bold text-slate-800 dark:text-slate-200">{editingRow.shortageQty || '—'}</span></div>
-                <div><span className="block text-slate-400 font-bold uppercase tracking-wider text-[9px]">Credit Note Req.</span><span className="font-bold text-slate-800 dark:text-slate-200">{editingRow.creditNoteRequested || '—'}</span></div>
+                <div><span className="block text-slate-400 font-bold uppercase tracking-wider text-[9px]">Credit Note Req.</span><span className="font-bold text-slate-800 dark:text-slate-200 truncate block max-w-[100px]">{editingRow.creditNoteRequested?.startsWith('http') ? 'Document Attached' : (editingRow.creditNoteRequested || '—')}</span></div>
                 <div><span className="block text-slate-400 font-bold uppercase tracking-wider text-[9px]">Invoice Decision</span><span className="font-bold text-slate-800 dark:text-slate-200">{editingRow.invoiceReviewDecision || '—'}</span></div>
               </div>
               <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
@@ -473,6 +480,9 @@ export default function CreditNoteView({ onAddToast }: CreditNoteViewProps) {
                 {editingRow.uploadVendorCreditNote ? (
                   <a href={editingRow.uploadVendorCreditNote} target="_blank" rel="noreferrer" className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline">View Vendor Credit Note</a>
                 ) : <span className="text-[11px] font-bold text-slate-400">No Vendor Credit Note</span>}
+                {editingRow.creditNoteRequested?.startsWith('http') && (
+                  <a href={editingRow.creditNoteRequested} target="_blank" rel="noreferrer" className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline">View Credit Note Req.</a>
+                )}
               </div>
             </div>
 
