@@ -649,7 +649,7 @@ export default function MaterialReceiptView({ onAddToast }: MaterialReceiptViewP
                   </div>
                   {renderUpload('creditNoteRequested', 'Credit Note Requested by Customer')}
                   <div className="md:col-span-2">
-                    {renderUpload('uploadVendorCreditNote', 'Upload Vendor Credit Note')}
+                    {renderUpload('uploadVendorCreditNote', editingRow.allocationId?.includes('/S') ? 'Upload Debit Note Received from L1' : 'Upload Vendor Credit Note')}
                   </div>
                 </div>
               </div>

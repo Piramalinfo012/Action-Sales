@@ -644,8 +644,8 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
               {/* Uploads — file upload to Google Drive */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                 {([
-                  { key: 'invoiceVendor' as UploadKey, label: 'Upload Invoice Recievd From Vender', show: true },
-                  { key: 'taxInvoiceWayBill' as UploadKey, label: 'Uplaod Tax Invoice With way Bill', show: true },
+                  { key: 'invoiceVendor' as UploadKey, label: editingRow.allocationId?.includes('/S') ? 'Upload Invoice Recievd From L1' : 'Upload Invoice Recievd From Vender', show: true },
+                  { key: 'taxInvoiceWayBill' as UploadKey, label: 'Uplaod PPPL Tax Invoice With way Bill', show: true },
                   { key: 'uploadTransportationBill' as UploadKey, label: 'Upload Tranporation Bill', show: (editingRow.allocationId?.includes('/S') ? editingRow.transportation?.trim() === 'Vender Transport' : editingRow.transportation?.trim() === 'Own Transport(PPPL)') }
                 ]).filter(item => item.show).map(({ key, label }) => {
                   const up = uploads[key];

@@ -490,7 +490,7 @@ export default function CreditNoteView({ onAddToast }: CreditNoteViewProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Credit Note Mail To Customer</label>
+                  <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">{editingRow.allocationId?.includes('/S') ? 'Credit Note Email To L1' : 'Credit Note Mail To Customer'}</label>
                   <input
                     type="text"
                     value={fields.creditNoteMailCustomer}

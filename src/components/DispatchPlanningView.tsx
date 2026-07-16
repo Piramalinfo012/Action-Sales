@@ -56,10 +56,10 @@ const emptyFields: DispatchFields = {
   dispatchRemark: ''
 };
 
-// Today's date as DD/MM/YYYY (used to stamp the AC Dispatch date on save).
+// Today's date as Google Sheets DATE formula (used to stamp the AC Dispatch date on save as a native Date).
 const todayDDMMYYYY = (): string => {
   const d = new Date();
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  return `=DATE(${d.getFullYear()}, ${d.getMonth() + 1}, ${d.getDate()})`;
 };
 
 // Format any stored delivery value to DD/MM/YYYY (with HH:MM if a time is present).
