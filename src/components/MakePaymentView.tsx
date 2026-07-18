@@ -13,7 +13,7 @@ import {
 import { getDispatchRows, DispatchRecord, updateMakePaymentInSheet, API_URL } from '../api';
 
 const RECEIPT_FOLDER_ID = '1HBi8BusMyDY_lQ1b7iJEJQvcuqayThu_';
-type UploadKey = 'uploadInvoiceEwayBill';
+type UploadKey = 'uploadInvoiceEwayBill' | 'transportBill';
 
 interface MakePaymentViewProps {
   onAddToast?: (type: any, title: string, desc: string) => void;
@@ -34,7 +34,8 @@ export default function MakePaymentView({ onAddToast }: MakePaymentViewProps) {
   });
 
   const [uploads, setUploads] = useState<Record<UploadKey, { uploading: boolean; progress: number; fileName?: string; fileSize?: string }>>({
-    uploadInvoiceEwayBill: { uploading: false, progress: 0 }
+    uploadInvoiceEwayBill: { uploading: false, progress: 0 },
+    transportBill: { uploading: false, progress: 0 }
   });
 
   const formatDate = (dateStr: string) => {
@@ -160,7 +161,8 @@ export default function MakePaymentView({ onAddToast }: MakePaymentViewProps) {
       makePaymentRemark: row.makePaymentRemark || ''
     });
     setUploads({
-      uploadInvoiceEwayBill: { uploading: false, progress: row.uploadInvoiceEwayBill ? 100 : 0, fileName: row.uploadInvoiceEwayBill ? 'Uploaded file' : undefined }
+      uploadInvoiceEwayBill: { uploading: false, progress: row.uploadInvoiceEwayBill ? 100 : 0, fileName: row.uploadInvoiceEwayBill ? 'Uploaded file' : undefined },
+      transportBill: { uploading: false, progress: row.transportBill ? 100 : 0, fileName: row.transportBill ? 'Uploaded file' : undefined }
     });
   };
 
@@ -529,18 +531,7 @@ export default function MakePaymentView({ onAddToast }: MakePaymentViewProps) {
 
             <form onSubmit={handleSave} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Transport Bill</label>
-                  <input
-                    type="text"
-                    value={fields.transportBill}
-                    onChange={(e) => setFields({ ...fields, transportBill: e.target.value })}
-                    placeholder="e.g. TR-1234..."
-                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold transition-all"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
+                <div className="md:col-span-2 space-y-1.5">
                   <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">Remark</label>
                   <input
                     type="text"
@@ -551,7 +542,11 @@ export default function MakePaymentView({ onAddToast }: MakePaymentViewProps) {
                   />
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="md:col-span-1">
+                  {renderUpload('transportBill', 'Transport Bill')}
+                </div>
+
+                <div className="md:col-span-1">
                   {renderUpload('uploadInvoiceEwayBill', 'Upload Invoice / E-way Bill')}
                 </div>
               </div>
