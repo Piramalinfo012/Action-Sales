@@ -75,7 +75,7 @@ export default function NewActionView({
   const [listSearchTerm, setListSearchTerm] = useState('');
 
   // L1 Confirmation status filter
-  const [l1StatusFilter, setL1StatusFilter] = useState<'all' | 'completed' | 'pending'>('all');
+  const [l1StatusFilter, setL1StatusFilter] = useState<'all' | 'completed' | 'pending'>('pending');
 
   // Derive an entry's L1 status the same way the status badge does.
   const getL1Status = (action: ActionEntry): 'completed' | 'pending' | 'notscheduled' => {
