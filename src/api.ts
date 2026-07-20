@@ -747,6 +747,7 @@ export interface AllocationRow {
   purchaseQuantity: string;
   purchaseRate: string;
   isSale?: boolean;
+  willPurchase?: string;
   // Dispatch planning fields (columns Q-X)
   acDispatch: string;       // Q  AC Dispatch (actual dispatch date)
   dispatchQuantity: string; // R
@@ -813,6 +814,7 @@ export async function getSaleAllocationRows(): Promise<{ success: boolean; data:
         quntity: str(row[4]),                  // E
         productName: str(row[5]),              // F
         location: str(row[6]),                 // G
+        willPurchase: str(row[9]),             // J (Will the L1 Party Purchase Material from Us?)
         // Map Sale fields to Dispatch fields
         supplierName: supplier,                // I L1 Party Name -> Supplier Name
         purchaseQuantity: str(row[10]),        // K Sales Quantity -> Purchase Quantity
@@ -878,6 +880,7 @@ export async function getPurchaseAllocationRows(): Promise<{ success: boolean; d
         quntity: str(row[4]),                  // E
         productName: str(row[5]),              // F
         location: str(row[6]),                 // G
+        willPurchase: str(row[8]),             // I (Will We Purchase Material from Another Party?)
         supplierName: supplier,                // J
         purchaseQuantity: str(row[10]),        // K
         purchaseRate: str(row[11]),            // L

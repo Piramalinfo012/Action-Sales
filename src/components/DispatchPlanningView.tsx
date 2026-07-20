@@ -156,7 +156,7 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
           byAlloc.get(k)!.push(d);
         });
 
-        const allAllocations = [...(allocRes.data || []), ...(saleRes.data || [])];
+        const allAllocations = [...(allocRes.data || []), ...(saleRes.data || [])].filter(a => !(a.isSale && (a.willPurchase === 'No' || a.willPurchase === 'NO' || a.willPurchase?.toLowerCase() === 'no')));
         const merged: DispatchQueueRow[] = allAllocations.map((a) => {
           const recs = byAlloc.get((a.allocationId || '').trim().toLowerCase()) || [];
           const dispatchedQty = recs.reduce((s, r) => s + (parseFloat(r.dispatchQuantity) || 0), 0);
