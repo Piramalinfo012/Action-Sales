@@ -52,6 +52,7 @@ import SettingsView from './components/SettingsView';
 import UserSettingsView from './components/UserSettingsView';
 import LoginView from './components/LoginView';
 import DriveFolderView from './components/DriveFolderView';
+import ChatboxWidget from './components/ChatboxWidget';
 
 interface Toast {
   id: string;
@@ -607,7 +608,24 @@ export default function App() {
     { id: 'settings' as SidebarTab, label: 'Settings', icon: SettingsIcon, roles: ['Admin', 'Sales', 'Manager'] },
   ];
 
-  const allowedMobileItems = menuItems.filter(item => item.roles.includes(user.role));
+  const allowedMobileItems = menuItems.filter(item => {
+    if (!user) return false;
+    
+    if (user.pageAccess && user.pageAccess.toLowerCase() !== 'all') {
+      const accessList = user.pageAccess.split(',').map(s => s.trim().toLowerCase());
+      
+      // Handle the pending group
+      if (item.id === 'pending') {
+        return accessList.includes('pending') || accessList.includes('dispatch-status');
+      }
+      
+      return accessList.includes(item.id.toLowerCase());
+    }
+
+    // Fallback to role based
+    if (user.role === 'Admin') return true;
+    return item.roles.includes(user.role);
+  });
 
   return (
     <div className={`h-screen overflow-hidden font-sans transition-colors duration-300 ${darkMode ? 'dark sleek-bg-dark text-slate-100' : 'sleek-bg-light text-slate-800'}`}>
@@ -862,6 +880,9 @@ export default function App() {
           ))}
         </AnimatePresence>
       </div>
+      
+      {/* Global Team Chatbox */}
+      {user && <ChatboxWidget user={user} />}
 
     </div>
   );

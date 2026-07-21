@@ -4,6 +4,7 @@ export interface User {
   role: 'Admin' | 'Sales' | 'Manager';
   rowIndex?: number; // Store the sheet row index to facilitate password updates
   profileUrl?: string;
+  pageAccess?: string; // Comma separated list of allowed page ids
 }
 
 export interface ActionEntry {

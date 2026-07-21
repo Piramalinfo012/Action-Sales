@@ -49,6 +49,23 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
   // Filter menu items by user role
   const allowedMenuItems = menuItems.filter(item => {
     if (!user) return false;
+    
+    if (user.pageAccess && user.pageAccess.toLowerCase() !== 'all') {
+      const accessList = user.pageAccess.split(',').map(s => s.trim().toLowerCase());
+      
+      // Handle groups
+      if (item.id === 'accounts-group') {
+        return accessList.includes('credit-note') || accessList.includes('payment-confirmation') || accessList.includes('make-payment');
+      }
+      if (item.id === 'pending') {
+        return accessList.includes('pending') || accessList.includes('dispatch-status');
+      }
+      
+      return accessList.includes(item.id.toLowerCase());
+    }
+
+    // Fallback to role based
+    if (user.role === 'Admin') return true;
     return item.roles.includes(user.role);
   });
 
