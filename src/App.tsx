@@ -210,6 +210,13 @@ export default function App() {
     }
   };
 
+  // Remove hash from URL if it exists (cleanup from old dummy links)
+  useEffect(() => {
+    if (window.location.hash === '#') {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }, []);
+
   // Trigger loading logs on mount or session change
   useEffect(() => {
     if (user) {
