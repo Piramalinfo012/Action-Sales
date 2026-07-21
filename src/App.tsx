@@ -784,34 +784,38 @@ export default function App() {
                           
                           {isMobileDispatchOpen && (
                             <div className="pl-12 pr-2 space-y-1 mt-1">
-                              <button
-                                onClick={() => {
-                                  setActiveTab('pending');
-                                  setIsMobileMenuOpen(false);
-                                }}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                                  activeTab === 'pending'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
-                                }`}
-                              >
-                                <Truck className="w-4 h-4" />
-                                <span>Dispatch Planning</span>
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setActiveTab('dispatch-status');
-                                  setIsMobileMenuOpen(false);
-                                }}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                                  activeTab === 'dispatch-status'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
-                                }`}
-                              >
-                                <Activity className="w-4 h-4" />
-                                <span>Dispatch Status</span>
-                              </button>
+                              {(!user?.pageAccess || user.pageAccess.toLowerCase() === 'all' || user.pageAccess.toLowerCase().includes('pending')) && (
+                                <button
+                                  onClick={() => {
+                                    setActiveTab('pending');
+                                    setIsMobileMenuOpen(false);
+                                  }}
+                                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                                    activeTab === 'pending'
+                                      ? 'bg-blue-600 text-white'
+                                      : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
+                                  }`}
+                                >
+                                  <Truck className="w-4 h-4" />
+                                  <span>Dispatch Planning</span>
+                                </button>
+                              )}
+                              {(!user?.pageAccess || user.pageAccess.toLowerCase() === 'all' || user.pageAccess.toLowerCase().includes('dispatch-status')) && (
+                                <button
+                                  onClick={() => {
+                                    setActiveTab('dispatch-status');
+                                    setIsMobileMenuOpen(false);
+                                  }}
+                                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                                    activeTab === 'dispatch-status'
+                                      ? 'bg-blue-600 text-white'
+                                      : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
+                                  }`}
+                                >
+                                  <Activity className="w-4 h-4" />
+                                  <span>Dispatch Status</span>
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
