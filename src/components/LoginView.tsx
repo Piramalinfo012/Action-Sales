@@ -299,7 +299,7 @@ export default function LoginView({ onLoginSuccess, onAddToast }: LoginViewProps
           <div className="flex flex-col gap-2 text-xs font-medium text-slate-500 mt-10">
             <div className="flex items-center gap-4">
               <span>© {new Date().getFullYear()} Auction Sales Management.</span>
-              <a href="#" className="hover:text-emerald-400 transition-colors pointer-events-auto">Privacy Policy</a>
+              <button type="button" className="hover:text-emerald-400 transition-colors pointer-events-auto cursor-pointer">Privacy Policy</button>
             </div>
             <span className="text-emerald-500/80 font-bold tracking-wider">DEVELOPED BY DEEPAK SAHU</span>
           </div>
@@ -394,9 +394,9 @@ export default function LoginView({ onLoginSuccess, onAddToast }: LoginViewProps
                 <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer shadow-sm" />
                 <span className="text-sm text-slate-600 font-medium group-hover:text-slate-900 transition-colors">Remember me</span>
               </label>
-              <a href="#" className="text-sm font-bold text-emerald-600 hover:text-emerald-700 transition-colors">
+              <button type="button" className="text-sm font-bold text-emerald-600 hover:text-emerald-700 transition-colors cursor-pointer">
                 Forgot password?
-              </a>
+              </button>
             </div>
 
             <motion.button
