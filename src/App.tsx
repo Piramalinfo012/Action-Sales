@@ -359,8 +359,12 @@ export default function App() {
       success = true;
       addToast('success', 'L1 Confirmation Saved', 'L1 details updated locally.');
     } else {
-      // Remote sheet update
-      const res = await updateL1ConfirmationInSheet(
+      // Optimistic local update so UI reflects immediately and closes modal fast
+      setActions((prev) => prev.map((a) => a.id === entry.id ? updatedEntry : a));
+      success = true; // Return success immediately for fast UI
+      
+      // Run remote sheet update in the background
+      updateL1ConfirmationInSheet(
         rowIndex,
         entry,
         planned1,
@@ -382,24 +386,21 @@ export default function App() {
         saleUploadSoCopy,
         salePaymentTerms,
         saleShortageCondition
-      );
-      if (res.success) {
-        // Optimistic local update so UI reflects immediately
-        setActions((prev) => prev.map((a) => a.id === entry.id ? updatedEntry : a));
-        
-        // Background tasks
-        syncSuppliersToAllocation(entry, willPurchase, suppliers).then(allocRes => {
-          if (!allocRes.success) {
-            addToast('info', 'Allocation Sheet', allocRes.error || 'Saved L1, but could not update the Purchase Allocation sheet.');
-          }
-        });
-        loadActions(); // background refresh
-        
-        success = true;
-        addToast('success', 'L1 Confirmed', 'Successfully updated L1 Confirmation in Google Sheet database!');
-      } else {
-        addToast('error', 'Update Failed', res.error || 'Failed to save L1 Confirmation to Google Sheets.');
-      }
+      ).then(res => {
+        if (res.success) {
+          // Background tasks
+          syncSuppliersToAllocation(entry, willPurchase, suppliers).then(allocRes => {
+            if (!allocRes.success) {
+              addToast('info', 'Allocation Sheet', allocRes.error || 'Saved L1, but could not update the Purchase Allocation sheet.');
+            }
+          });
+          loadActions(); // background refresh
+          addToast('success', 'L1 Confirmed', 'Successfully updated L1 Confirmation in Google Sheet database!');
+        } else {
+          addToast('error', 'Update Failed', res.error || 'Failed to save L1 Confirmation to Google Sheets.');
+          loadActions(); // Revert to remote state on error
+        }
+      });
     }
     return success;
   };
