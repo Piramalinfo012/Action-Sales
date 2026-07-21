@@ -482,17 +482,13 @@ export default function PaymentConfirmView({ onAddToast }: PaymentConfirmViewPro
                       )}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-right">
-                      {!isConfirmed(r) ? (
                         <button
                           onClick={() => openUpdate(r)}
                           className="px-3.5 py-1.5 bg-white dark:bg-slate-800/80 hover:bg-blue-600 dark:hover:bg-blue-600 text-slate-700 dark:text-slate-200 hover:text-white dark:hover:text-white text-[11px] font-bold rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-600 shadow-sm hover:shadow-md hover:shadow-blue-600/20 transition-all flex items-center gap-1.5 ml-auto cursor-pointer group/btn"
                         >
                           <CheckCircle className="w-3.5 h-3.5 text-blue-500 group-hover/btn:text-white transition-colors" />
-                          <span>Confirm Payment</span>
+                          <span>{!isConfirmed(r) ? 'Confirm Payment' : 'Update Payment'}</span>
                         </button>
-                      ) : (
-                        <span className="text-[10px] font-bold text-slate-400">—</span>
-                      )}
                     </td>
                   </tr>
                 );

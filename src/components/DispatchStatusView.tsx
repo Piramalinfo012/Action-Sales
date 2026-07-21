@@ -502,17 +502,13 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
                           )}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-right">
-                          {!isDispatched(r) ? (
                             <button
                               onClick={() => openUpdate(r)}
                               className="px-3.5 py-1.5 bg-white dark:bg-slate-800/80 hover:bg-indigo-600 dark:hover:bg-indigo-600 text-slate-700 dark:text-slate-200 hover:text-white dark:hover:text-white text-[11px] font-bold rounded-xl border border-slate-200 dark:border-slate-700 hover:border-indigo-600 shadow-sm hover:shadow-md hover:shadow-indigo-600/20 transition-all flex items-center gap-1.5 ml-auto cursor-pointer group/btn"
                             >
                               <Activity className="w-3.5 h-3.5 text-indigo-500 group-hover/btn:text-white transition-colors" />
-                              <span>Update Status</span>
+                              <span>{!isDispatched(r) ? 'Update Status' : 'Edit Status'}</span>
                             </button>
-                          ) : (
-                            <span className="text-[10px] font-bold text-slate-400">—</span>
-                          )}
                         </td>
                       </tr>
                       );
