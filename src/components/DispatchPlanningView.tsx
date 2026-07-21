@@ -56,6 +56,15 @@ const emptyFields: DispatchFields = {
   dispatchRemark: ''
 };
 
+// Helper function for determining if "Rupies / ltr" should be shown/saved
+const shouldShowRupees = (isSale: boolean, transportation: string, material: string) => {
+  const isPiramal = material?.trim().toLowerCase() === 'piramal petroleum';
+  if (isPiramal) {
+    return transportation === 'Vender Transport' || transportation === 'Other transport';
+  }
+  return isSale ? transportation === 'Vender Transport' : transportation === 'Own Transport(PPPL)';
+};
+
 // Today's date as Google Sheets DATE formula (used to stamp the AC Dispatch date on save as a native Date).
 const todayDDMMYYYY = (): string => {
   const d = new Date();
@@ -234,8 +243,8 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
     rateProfiled: row.lastRate || row.purchaseRate || '',
     materialSuppliedFrom: row.lastMaterial || '',
     transportation: row.lastTransportation || '',
-    // Rupies/ltr only applies to Own Transport(PPPL); don't carry it otherwise.
-    rupeesPerLtr: (row.isSale ? row.lastTransportation === 'Vender Transport' : row.lastTransportation === 'Own Transport(PPPL)') ? (row.lastRupees || '') : '',
+    // Rupies/ltr visibility check
+    rupeesPerLtr: shouldShowRupees(row.isSale || false, row.lastTransportation || '', row.lastMaterial || '') ? (row.lastRupees || '') : '',
     dispatchRemark: ''
   });
 
@@ -252,8 +261,10 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
       ...fields,
       acDispatch: todayDDMMYYYY(),
       deliveryDateTime: datetimeLocalToDDMM(fields.deliveryDateTime),
-      // Rupies/ltr is only valid for Own Transport(PPPL) — never store it otherwise.
-      rupeesPerLtr: (editingRow.isSale ? fields.transportation === 'Vender Transport' : fields.transportation === 'Own Transport(PPPL)') ? fields.rupeesPerLtr : ''
+      // Rupies/ltr visibility logic check
+      rupeesPerLtr: shouldShowRupees(editingRow.isSale || false, fields.transportation, fields.materialSuppliedFrom) 
+                     ? fields.rupeesPerLtr 
+                     : ''
     };
     const justDispatched = parseFloat(payload.dispatchQuantity) || 0;
     const newDispatched = editingRow.dispatchedQty + justDispatched;
@@ -713,7 +724,14 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
                     <Package className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
                     <select
                       value={fields.materialSuppliedFrom}
-                      onChange={(e) => setFields({ ...fields, materialSuppliedFrom: e.target.value })}
+                      onChange={(e) => {
+                        const mat = e.target.value;
+                        setFields((prev) => ({ 
+                           ...prev, 
+                           materialSuppliedFrom: mat,
+                           rupeesPerLtr: shouldShowRupees(editingRow.isSale || false, prev.transportation, mat) ? prev.rupeesPerLtr : ''
+                        }));
+                      }}
                       className="w-full pl-10 pr-8 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all appearance-none cursor-pointer"
                     >
                       <option value="">Select source…</option>
@@ -738,11 +756,10 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
                       value={fields.transportation}
                       onChange={(e) => {
                         const t = e.target.value;
-                        // Clear Rupies/ltr whenever transport isn't Own Transport(PPPL).
                         setFields((prev) => ({
                           ...prev,
                           transportation: t,
-                          rupeesPerLtr: (editingRow.isSale ? t === 'Vender Transport' : t === 'Own Transport(PPPL)') ? prev.rupeesPerLtr : ''
+                          rupeesPerLtr: shouldShowRupees(editingRow.isSale || false, t, prev.materialSuppliedFrom) ? prev.rupeesPerLtr : ''
                         }));
                       }}
                       className="w-full pl-10 pr-8 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold transition-all appearance-none cursor-pointer"
@@ -762,8 +779,8 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
                 </div>
               </div>
 
-              {/* Rupies / ltr — only for Own Transport(PPPL); preset dropdown + free input */}
-              {(editingRow.isSale ? fields.transportation === 'Vender Transport' : fields.transportation === 'Own Transport(PPPL)') && (
+              {/* Rupies / ltr — Dynamic Visibility based on Material and Transport */}
+              {shouldShowRupees(editingRow.isSale || false, fields.transportation, fields.materialSuppliedFrom) && (
                 <div className="space-y-1.5 bg-indigo-500/5 border border-indigo-500/15 rounded-2xl p-3.5">
                   <label className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider block">Rupies / ltr</label>
                   <div className="relative">

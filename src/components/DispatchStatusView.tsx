@@ -642,7 +642,7 @@ export default function DispatchStatusView({ onAddToast }: DispatchStatusViewPro
                 {([
                   { key: 'invoiceVendor' as UploadKey, label: editingRow.allocationId?.includes('/S') ? 'Upload Invoice Recievd From L1' : 'Upload Invoice Recievd From Vender', show: true },
                   { key: 'taxInvoiceWayBill' as UploadKey, label: 'Uplaod PPPL Tax Invoice With way Bill', show: true },
-                  { key: 'uploadTransportationBill' as UploadKey, label: 'Upload Tranporation Bill', show: (editingRow.allocationId?.includes('/S') ? editingRow.transportation?.trim() === 'Vender Transport' : editingRow.transportation?.trim() === 'Own Transport(PPPL)') }
+                  { key: 'uploadTransportationBill' as UploadKey, label: 'Upload Tranporation Bill', show: (editingRow.allocationId?.includes('/S') ? editingRow.transportation?.trim() === 'Vender Transport' : editingRow.transportation?.trim() === 'Own Transport(PPPL)') && !(editingRow.materialSuppliedFrom?.trim().toLowerCase() === 'piramal petroleum' && editingRow.transportation?.trim() === 'Own Transport(PPPL)') }
                 ]).filter(item => item.show).map(({ key, label }) => {
                   const up = uploads[key];
                   const url = fields[key];
