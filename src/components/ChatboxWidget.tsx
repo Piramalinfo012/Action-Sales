@@ -143,17 +143,32 @@ export default function ChatboxWidget({ user }: ChatboxWidgetProps) {
               ) : (
                 messages.map((msg, idx) => {
                   const isMe = msg.name === user.name;
+                  
+                  // Format time helper
+                  let displayTime = msg.timestamp;
+                  try {
+                    const d = new Date(msg.timestamp);
+                    if (!isNaN(d.getTime())) {
+                      displayTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    }
+                  } catch (e) {
+                    // ignore and use raw string
+                  }
+
                   return (
                     <div key={idx} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                       <div className="text-[10px] text-slate-500 mb-1 px-1 font-medium flex items-center gap-1">
                         {!isMe && <span>{msg.name} ({msg.role})</span>}
                       </div>
-                      <div className={`px-3 py-2 rounded-2xl max-w-[85%] text-sm shadow-sm ${
+                      <div className={`px-3 py-2 rounded-2xl max-w-[85%] text-sm shadow-sm flex flex-col ${
                         isMe 
                           ? 'bg-emerald-500 text-white rounded-br-none' 
                           : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-bl-none'
                       }`}>
-                        {msg.message}
+                        <span>{msg.message}</span>
+                        <span className={`text-[9px] self-end mt-1 ${isMe ? 'text-emerald-100/90' : 'text-slate-400 dark:text-slate-500'} font-medium`}>
+                          {displayTime}
+                        </span>
                       </div>
                     </div>
                   );
