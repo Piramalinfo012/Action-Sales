@@ -154,7 +154,10 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
     try {
       // Candidates come from Purchase Allocation; saved dispatch data lives in the
       // 'Dispatch' sheet. Merge the two by Allocation ID.
-      const [allocRes, saleRes, dispRes] = await Promise.all([getPurchaseAllocationRows(), getSaleAllocationRows(), getDispatchRows()]);
+      const allocRes = await getPurchaseAllocationRows();
+      const saleRes = await getSaleAllocationRows();
+      const dispRes = await getDispatchRows();
+      
       if (allocRes.success || saleRes.success) {
         // Group ALL dispatch records by allocation (an order can be dispatched in parts).
         const byAlloc = new Map<string, DispatchRecord[]>();
@@ -224,13 +227,14 @@ export default function DispatchPlanningView({ onAddToast }: DispatchPlanningVie
   }, []);
 
   useEffect(() => {
-    loadRows();
-    // Load the material-source options from the Master sheet (column A2:A).
-    getMaterialSourcesFromMaster()
-      .then((res) => {
-        if (res.success) setMaterialSources(res.data);
-      })
-      .catch(() => { /* keep dropdown empty on failure */ });
+    loadRows().then(() => {
+      // Load the material-source options from the Master sheet (column A2:A).
+      getMaterialSourcesFromMaster()
+        .then((res) => {
+          if (res.success) setMaterialSources(res.data);
+        })
+        .catch(() => { /* keep dropdown empty on failure */ });
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

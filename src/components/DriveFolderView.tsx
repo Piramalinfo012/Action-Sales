@@ -81,10 +81,8 @@ export default function DriveFolderView({ folderId, onAddToast }: DriveFolderVie
   const loadRealFiles = async (silent = false) => {
     if (!silent) setIsLoadingData(true);
     try {
-      const [actionsRes, dispatchRes] = await Promise.all([
-        getActionsFromSheet(),
-        getDispatchRows()
-      ]);
+      const actionsRes = await getActionsFromSheet();
+      const dispatchRes = await getDispatchRows();
 
       const extractedFiles: FileItem[] = [];
 
