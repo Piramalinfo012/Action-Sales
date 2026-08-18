@@ -91,8 +91,11 @@ export async function updateUserPasswordInSheet(
 export async function getActionsFromSheet(): Promise<{ success: boolean; data?: ActionEntry[]; isOffline?: boolean; error?: string }> {
   try {
     // Cache-bust so edits made directly in the sheet always show up on refresh.
-    const response = await fetch(`${API_URL}?sheet=FMS&t=${Date.now()}`, { cache: 'no-store' });
-    const result = await response.json();
+    // Fetch FMS and Sale Allocations concurrently to drastically reduce loading time.
+    const fmsPromise = fetch(`${API_URL}?sheet=FMS&t=${Date.now()}`, { cache: 'no-store' }).then(res => res.json());
+    const salePromise = getSaleAllocationRows().catch(() => ({ success: false, data: [] }));
+
+    const [result, saleRes] = await Promise.all([fmsPromise, salePromise]);
     
     if (result.success && result.data) {
       let headerIdx = 0;
@@ -137,6 +140,7 @@ export async function getActionsFromSheet(): Promise<{ success: boolean; data?: 
             else if (key.includes('timedelay1') || key.includes('delay1')) mappedKey = 'timeDelay1';
             else if (key.includes('arewel1') || key.includes('wel1') || key.includes('l1?')) mappedKey = 'areWeL1';
             else if (key.includes('timedelay2') || key.includes('delay2')) mappedKey = 'timeDelay2';
+            else if (key.includes('validity')) mappedKey = 'validity';
             else if (key.includes('willwepurchasematerial') || key.includes('purchasefromanother') || key.includes('anotherparty')) mappedKey = 'willPurchase';
             else if (key.includes('suppliername') || key.includes('supplier')) mappedKey = 'supplierName';
             else if (key.includes('purchasequantity')) mappedKey = 'purchaseQuantity';
@@ -176,6 +180,7 @@ export async function getActionsFromSheet(): Promise<{ success: boolean; data?: 
             productName: (colF ?? obj.productName) || '',
             location: (colG ?? obj.location) || '',
             remark: (colH ?? obj.remark) || '',
+            validity: obj.validity || '',
             planned1: formatToDDMMYYYY(obj.planned1),
             actual1: formatToDDMMYYYY(obj.actual1),
             timeDelay1: obj.timeDelay1 || '',
@@ -193,10 +198,9 @@ export async function getActionsFromSheet(): Promise<{ success: boolean; data?: 
           } as ActionEntry;
         });
       
-      // Fetch Sale Allocations to merge L1 Party Name back into entries
+      // Merge Sale Allocations L1 Party Name back into entries using the concurrently fetched data
       try {
-        const saleRes = await getSaleAllocationRows();
-        if (saleRes.success && saleRes.data) {
+        if (saleRes && saleRes.success && saleRes.data) {
           const saleMap = new Map();
           for (const s of saleRes.data) {
             saleMap.set(s.id, s.supplierName); // For sale, supplierName holds L1 Party Name
@@ -230,16 +234,17 @@ export async function insertActionToSheet(
   entry: ActionEntry
 ): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
-    const rowData = [
-      entry.timestamp,   // Timetamp
-      entry.id,          // ID
-      entry.companyName, // Company Name
-      entry.quntity,     // Quntity
-      entry.unit,        // Unit
-      entry.productName, // Product Name
-      entry.location,    // Location
-      entry.remark       // Remark
-    ];
+    const rowData = new Array(43).fill('');
+    rowData[0] = entry.timestamp;
+    rowData[1] = entry.id;
+    rowData[2] = entry.companyName;
+    rowData[3] = entry.quntity;
+    rowData[4] = entry.unit;
+    rowData[5] = entry.productName;
+    rowData[6] = entry.location;
+    rowData[7] = entry.remark;
+    rowData[42] = entry.validity || '';
+
     const query = `?sheetName=FMS&action=insert&rowData=${encodeURIComponent(JSON.stringify(rowData))}`;
     const response = await fetch(`${API_URL}${query}`, { method: 'POST' });
     const result = await response.json();
@@ -271,6 +276,12 @@ export async function updateActionInSheet(
     const query = `?sheetName=FMS&action=update&rowIndex=${rowIndex}&rowData=${encodeURIComponent(JSON.stringify(rowData))}`;
     const response = await fetch(`${API_URL}${query}`, { method: 'POST' });
     const result = await response.json();
+    
+    // Also update Validity cell at AQ (43rd column)
+    if (entry.validity !== undefined) {
+      await updateCellValue('FMS', rowIndex, 43, entry.validity);
+    }
+
     if (result.success) {
       return { success: true, message: result.message };
     }

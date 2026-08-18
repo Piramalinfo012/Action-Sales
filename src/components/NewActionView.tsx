@@ -221,6 +221,7 @@ export default function NewActionView({
   const [productName, setProductName] = useState(() => initialProducts[0] || 'Fuel Oil (Purcha)');
   const [location, setLocation] = useState('RPR');
   const [remark, setRemark] = useState('');
+  const [validity, setValidity] = useState('');
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -503,7 +504,8 @@ const handleSaleDragOver = (e: React.DragEvent) => {
       unit: unit.trim(),
       productName: productName.trim(),
       location: location.trim(),
-      remark: remark.trim()
+      remark: remark.trim(),
+      validity: validity.trim()
     };
 
     const success = await onAddAction(newEntry);
@@ -514,6 +516,7 @@ const handleSaleDragOver = (e: React.DragEvent) => {
       setCompanyName('');
       setQuntity('');
       setRemark('');
+      setValidity('');
       setTxnId(generateSequentialID());
       setDate(todayStr);
       setIsFormOpen(false); // Close form drawer on successful insert
@@ -1161,6 +1164,23 @@ const handleSaleDragOver = (e: React.DragEvent) => {
                       placeholder="e.g. DEMO"
                       value={remark}
                       onChange={(e) => setRemark(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Validity */}
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
+                    Validity
+                  </label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder="e.g. 30 Days or Valid till..."
+                      value={validity}
+                      onChange={(e) => setValidity(e.target.value)}
                       className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none font-semibold transition-all"
                     />
                   </div>

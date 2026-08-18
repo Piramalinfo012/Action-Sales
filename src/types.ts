@@ -16,6 +16,7 @@ export interface ActionEntry {
   productName: string; // Product Name
   location: string; // Location
   remark: string; // Remark
+  validity?: string; // Validity
   planned1?: string; // Planned1
   actual1?: string; // Actual1
   timeDelay1?: string; // Time Delay1

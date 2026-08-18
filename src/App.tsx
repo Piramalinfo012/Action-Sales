@@ -167,9 +167,9 @@ export default function App() {
       const id = (a.id ?? '').trim();
       // Skip blank local-* offline entries that have no real data
       if (id.startsWith('local-') && !a.companyName?.trim() && !a.productName?.trim()) return false;
-      const key = id
+      const key = id && !id.startsWith('local-')
         ? `id:${id.toLowerCase()}`
-        : `row:${a.timestamp ?? ''}|${a.companyName ?? ''}|${a.productName ?? ''}|${a.quntity ?? ''}`;
+        : `row:${a.rowIndex ?? Math.random()}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
